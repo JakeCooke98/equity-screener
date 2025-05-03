@@ -38,12 +38,40 @@ export function SymbolSearch({
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [filters, setFilters] = useState<FilterOptions>({})
+  const [preloadedTypes, setPreloadedTypes] = useState<string[]>([])
+  const [preloadedRegions, setPreloadedRegions] = useState<string[]>([])
+  const [isInitialized, setIsInitialized] = useState(false)
   
   // Ref for the input element
   const inputRef = useRef<HTMLInputElement>(null)
 
   // Use our custom hook for searching symbols
   const { results, isLoading, error } = useSymbolSearch(query, 400)
+
+  // Preload some initial data for filters
+  useEffect(() => {
+    const preloadData = async () => {
+      try {
+        // Use the static method to preload data
+        const popularResults = await useSymbolSearch.search('a')
+        
+        if (popularResults.length > 0) {
+          // Extract unique types and regions from results
+          const types = [...new Set(popularResults.map(result => result.type))].filter(Boolean)
+          const regions = [...new Set(popularResults.map(result => result.region))].filter(Boolean)
+          
+          setPreloadedTypes(types)
+          setPreloadedRegions(regions)
+        }
+      } catch (err) {
+        console.error('Error preloading filter data:', err)
+      } finally {
+        setIsInitialized(true)
+      }
+    }
+    
+    preloadData()
+  }, [])
 
   // Close the popover when a symbol is selected
   const handleSelect = (symbol: SymbolSearchMatch) => {
@@ -75,8 +103,8 @@ export function SymbolSearch({
     .sort((a, b) => parseFloat(b.matchScore) - parseFloat(a.matchScore))
 
   // Get unique values for filters
-  const uniqueTypes = [...new Set(results.map(result => result.type))]
-  const uniqueRegions = [...new Set(results.map(result => result.region))]
+  const uniqueTypes = [...new Set([...preloadedTypes, ...results.map(result => result.type)])].filter(Boolean)
+  const uniqueRegions = [...new Set([...preloadedRegions, ...results.map(result => result.region)])].filter(Boolean)
 
   // Toggle a type filter
   const toggleTypeFilter = (type: string) => {
@@ -127,75 +155,73 @@ export function SymbolSearch({
         )}
       </div>
 
-      {/* Filter options */}
-      {results.length > 0 && (
-        <div className="flex gap-2 mt-2 flex-wrap">
-          {/* Type filter */}
-          {uniqueTypes.length > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8">
-                  <FilterIcon className="h-3 w-3 mr-2" />
-                  Type {filters.type ? `: ${filters.type}` : ''}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-0">
-                <Command>
-                  <CommandList>
-                    <CommandGroup>
-                      {uniqueTypes.map(type => (
-                        <CommandItem
-                          key={type}
-                          onSelect={() => toggleTypeFilter(type)}
-                          className={filters.type === type ? 'bg-muted' : ''}
-                        >
-                          {type}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          )}
+      {/* Filter options - always visible */}
+      <div className="flex gap-2 mt-2 flex-wrap">
+        {/* Type filter */}
+        {uniqueTypes.length > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant={filters.type ? "default" : "outline"} size="sm" className="h-8">
+                <FilterIcon className="h-3 w-3 mr-2" />
+                Type {filters.type ? `: ${filters.type}` : ''}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-0">
+              <Command>
+                <CommandList>
+                  <CommandGroup>
+                    {uniqueTypes.map(type => (
+                      <CommandItem
+                        key={type}
+                        onSelect={() => toggleTypeFilter(type)}
+                        className={filters.type === type ? 'bg-muted' : ''}
+                      >
+                        {type}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        )}
 
-          {/* Region filter */}
-          {uniqueRegions.length > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="h-8">
-                  <FilterIcon className="h-3 w-3 mr-2" />
-                  Region {filters.region ? `: ${filters.region}` : ''}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-0">
-                <Command>
-                  <CommandList>
-                    <CommandGroup>
-                      {uniqueRegions.map(region => (
-                        <CommandItem
-                          key={region}
-                          onSelect={() => toggleRegionFilter(region)}
-                          className={filters.region === region ? 'bg-muted' : ''}
-                        >
-                          {region}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          )}
+        {/* Region filter */}
+        {uniqueRegions.length > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant={filters.region ? "default" : "outline"} size="sm" className="h-8">
+                <FilterIcon className="h-3 w-3 mr-2" />
+                Region {filters.region ? `: ${filters.region}` : ''}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-0">
+              <Command>
+                <CommandList>
+                  <CommandGroup>
+                    {uniqueRegions.map(region => (
+                      <CommandItem
+                        key={region}
+                        onSelect={() => toggleRegionFilter(region)}
+                        className={filters.region === region ? 'bg-muted' : ''}
+                      >
+                        {region}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        )}
 
-          {/* Clear filters button */}
-          {(filters.type || filters.region) && (
-            <Button variant="ghost" size="sm" className="h-8" onClick={clearFilters}>
-              Clear filters
-            </Button>
-          )}
-        </div>
-      )}
+        {/* Clear filters button */}
+        {(filters.type || filters.region) && (
+          <Button variant="ghost" size="sm" className="h-8" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        )}
+      </div>
 
       {/* Search results popover */}
       {(query.length > 0 || isLoading) && (
