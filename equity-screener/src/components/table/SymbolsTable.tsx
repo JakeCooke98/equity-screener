@@ -27,6 +27,7 @@ interface SymbolsTableProps {
   data: SymbolSearchMatch[]
   isLoading?: boolean
   onSelectRow?: (symbol: SymbolSearchMatch) => void
+  isRowSelected?: (symbol: SymbolSearchMatch) => boolean
   className?: string
 }
 
@@ -34,6 +35,7 @@ export function SymbolsTable({
   data, 
   isLoading = false,
   onSelectRow,
+  isRowSelected,
   className
 }: SymbolsTableProps) {
   const [currentPage, setCurrentPage] = useState(1)
@@ -147,6 +149,100 @@ export function SymbolsTable({
     return sorting.direction === 'asc' 
       ? <ChevronUp className="h-4 w-4 ml-1" />
       : <ChevronDown className="h-4 w-4 ml-1" />
+  }
+
+  // Render the rows with selected state if available
+  const renderRows = () => {
+    return currentData.map((symbol, index) => {
+      // Determine if row is selected based on context or local state
+      const isSelected = 
+        isRowSelected 
+          ? isRowSelected(symbol) 
+          : selectedRowIndex === index
+          
+      return (
+        <TableRow 
+          key={symbol.symbol && symbol.region ? 
+            `${symbol.symbol}-${symbol.region}` : 
+            `result-${index}`}
+          className={`cursor-pointer hover:bg-muted/50 ${isSelected ? 'bg-primary/5' : ''}`}
+          onClick={() => handleRowClick(symbol, index)}
+        >
+          {visibleColumns.includes('symbol') && (
+            <TableCell className="px-6 py-4 font-medium text-primary">
+              {symbol.symbol || 'Unknown'}
+            </TableCell>
+          )}
+          
+          {visibleColumns.includes('name') && (
+            <TableCell className="px-6 py-4 max-w-xs truncate">
+              {symbol.name || 'Unknown'}
+            </TableCell>
+          )}
+          
+          {visibleColumns.includes('ticker') && (
+            <TableCell className="px-6 py-4">
+              {symbol.symbol ? `${symbol.symbol}.${symbol.region || 'UNK'}` : 'Unknown'}
+            </TableCell>
+          )}
+          
+          {visibleColumns.includes('type') && (
+            <TableCell className="px-6 py-4">
+              {symbol.type || 'Unknown'}
+            </TableCell>
+          )}
+          
+          {visibleColumns.includes('region') && (
+            <TableCell className="px-6 py-4">
+              {symbol.region || 'Unknown'}
+            </TableCell>
+          )}
+          
+          {visibleColumns.includes('country') && (
+            <TableCell className="px-6 py-4">
+              {symbol.country || symbol.region || 'Unknown'}
+            </TableCell>
+          )}
+          
+          {visibleColumns.includes('currency') && (
+            <TableCell className="px-6 py-4">
+              {symbol.currency || 'Unknown'}
+            </TableCell>
+          )}
+          
+          {visibleColumns.includes('matchScore') && (
+            <TableCell className="px-6 py-4">
+              <div className="flex items-center gap-2">
+                <div className="w-16 bg-muted rounded-full h-2">
+                  <div 
+                    className="bg-primary h-2 rounded-full" 
+                    style={{ width: `${parseFloat(symbol.matchScore || '0') * 100}%` }}
+                  ></div>
+                </div>
+                <span className="text-xs">
+                  {(parseFloat(symbol.matchScore || '0') * 100).toFixed(0)}%
+                </span>
+              </div>
+            </TableCell>
+          )}
+          
+          <TableCell className="px-6 py-4 text-right">
+            <Button 
+              size="sm" 
+              variant={isSelected ? "default" : "ghost"}
+              className="h-7 w-7 p-0" 
+              onClick={(e) => {
+                e.stopPropagation()
+                handleRowClick(symbol, index)
+              }}
+            >
+              <PlusCircle className="h-4 w-4" />
+              <span className="sr-only">Add</span>
+            </Button>
+          </TableCell>
+        </TableRow>
+      )
+    })
   }
 
   return (
@@ -309,88 +405,7 @@ export function SymbolsTable({
                 </TableRow>
               ) : (
                 // Data rows
-                currentData.map((symbol, index) => (
-                  <TableRow 
-                    key={symbol.symbol && symbol.region ? 
-                      `${symbol.symbol}-${symbol.region}` : 
-                      `result-${index}`}
-                    className={`cursor-pointer hover:bg-muted/50 ${selectedRowIndex === index ? 'bg-primary/5' : ''}`}
-                    onClick={() => handleRowClick(symbol, index)}
-                  >
-                    {visibleColumns.includes('symbol') && (
-                      <TableCell className="px-6 py-4 font-medium text-primary">
-                        {symbol.symbol || 'Unknown'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns.includes('name') && (
-                      <TableCell className="px-6 py-4 max-w-xs truncate">
-                        {symbol.name || 'Unknown'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns.includes('ticker') && (
-                      <TableCell className="px-6 py-4">
-                        {symbol.symbol ? `${symbol.symbol}.${symbol.region || 'UNK'}` : 'Unknown'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns.includes('type') && (
-                      <TableCell className="px-6 py-4">
-                        {symbol.type || 'Unknown'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns.includes('region') && (
-                      <TableCell className="px-6 py-4">
-                        {symbol.region || 'Unknown'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns.includes('country') && (
-                      <TableCell className="px-6 py-4">
-                        {symbol.country || symbol.region || 'Unknown'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns.includes('currency') && (
-                      <TableCell className="px-6 py-4">
-                        {symbol.currency || 'Unknown'}
-                      </TableCell>
-                    )}
-                    
-                    {visibleColumns.includes('matchScore') && (
-                      <TableCell className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 bg-muted rounded-full h-2">
-                            <div 
-                              className="bg-primary h-2 rounded-full" 
-                              style={{ width: `${parseFloat(symbol.matchScore || '0') * 100}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-xs">
-                            {(parseFloat(symbol.matchScore || '0') * 100).toFixed(0)}%
-                          </span>
-                        </div>
-                      </TableCell>
-                    )}
-                    
-                    <TableCell className="px-6 py-4 text-right">
-                      <Button 
-                        size="sm" 
-                        variant="ghost" 
-                        className="h-7 w-7 p-0" 
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRowClick(symbol, index);
-                        }}
-                      >
-                        <PlusCircle className="h-4 w-4" />
-                        <span className="sr-only">Add</span>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
+                renderRows()
               )}
             </TableBody>
           </Table>
