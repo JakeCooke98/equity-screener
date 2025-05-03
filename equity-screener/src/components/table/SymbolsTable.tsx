@@ -11,7 +11,7 @@ import {
   TableRow 
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { ChevronLeft, ChevronRight, PlusCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, PlusCircle, MinusCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { SymbolSearchMatch } from '@/services/alphaVantage'
 import { cn } from '@/lib/utils'
@@ -117,7 +117,10 @@ export function SymbolsTable({
 
   // Row selection handler
   const handleRowClick = (symbol: SymbolSearchMatch, index: number) => {
-    setSelectedRowIndex(index)
+    // Update the local selected row state
+    setSelectedRowIndex(isRowSelected && isRowSelected(symbol) ? null : index)
+    
+    // Call the onSelectRow handler if provided
     if (onSelectRow) {
       onSelectRow(symbol)
     }
@@ -235,9 +238,14 @@ export function SymbolsTable({
                 e.stopPropagation()
                 handleRowClick(symbol, index)
               }}
+              title={isSelected ? `Remove ${symbol.symbol}` : `Add ${symbol.symbol}`}
             >
-              <PlusCircle className="h-4 w-4" />
-              <span className="sr-only">Add</span>
+              {isSelected ? (
+                <MinusCircle className="h-4 w-4" />
+              ) : (
+                <PlusCircle className="h-4 w-4" />
+              )}
+              <span className="sr-only">{isSelected ? 'Remove' : 'Add'}</span>
             </Button>
           </TableCell>
         </TableRow>

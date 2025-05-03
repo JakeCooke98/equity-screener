@@ -13,6 +13,7 @@ export interface SymbolSearchMatch {
   name: string;
   type: string;
   region: string;
+  country?: string; // Optional country field
   marketOpen: string;
   marketClose: string;
   timezone: string;

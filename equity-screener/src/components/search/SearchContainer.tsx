@@ -6,29 +6,31 @@ import { SymbolsTable } from '@/components/table/SymbolsTable'
 import { SymbolSearchMatch } from '@/services/alphaVantage'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Info } from 'lucide-react'
+import { AlertCircle, Info, X } from 'lucide-react'
 import { useSymbols } from '@/contexts/SymbolsContext'
 
 export function SearchContainer() {
-  const { addSymbol, isSymbolSelected } = useSymbols()
+  const { toggleSymbol, isSymbolSelected, selectedSymbols } = useSymbols()
   const [searchResults, setSearchResults] = useState<SymbolSearchMatch[]>([])
   const [isSearching, setIsSearching] = useState(false)
-  const [message, setMessage] = useState<{type: 'info' | 'warning' | 'success'; text: string} | null>(null)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [infoMessage, setInfoMessage] = useState<string | null>(null)
   const prevResultsLengthRef = useRef<number>(0)
 
   // Handle selecting a symbol from the results table
   const handleSelectSymbol = (symbol: SymbolSearchMatch) => {
-    // Add to selected symbols using the context
-    addSymbol(symbol)
+    // Check if we're at the maximum limit and trying to add a new symbol
+    if (selectedSymbols.length >= 5 && !isSymbolSelected(symbol)) {
+      // Show error message in toast
+      setErrorMessage(`Maximum limit reached (5 symbols). Remove a symbol before adding another.`)
+      
+      // Clear error message after 3 seconds
+      setTimeout(() => setErrorMessage(null), 3000)
+      return
+    }
     
-    // Show success message
-    setMessage({
-      type: 'success',
-      text: `Added ${symbol.symbol} (${symbol.name || 'Unknown'}) to your selection`
-    })
-    
-    // Clear message after 3 seconds
-    setTimeout(() => setMessage(null), 3000)
+    // Simply toggle the symbol without showing messages for success/removal
+    toggleSymbol(symbol)
   }
 
   // Handle search results from the SymbolSearch component
@@ -43,19 +45,16 @@ export function SearchContainer() {
     
     // Only show "no results" message when search is completed and length changes from positive to zero
     if (!isLoading && results.length === 0 && prevLength > 0) {
-      setMessage({
-        type: 'info',
-        text: 'No results found. Try a different search term or adjust filters.'
-      })
-    } else if (results.length > 0 && message?.text?.includes('No results found')) {
+      setInfoMessage('No results found. Try a different search term or adjust filters.')
+    } else if (results.length > 0 && infoMessage?.includes('No results found')) {
       // Clear the "no results" message when we have results again
-      setMessage(null)
+      setInfoMessage(null)
     }
   }
 
   // Determine what to show based on state
   const showTable = searchResults.length > 0 || isSearching
-  const showEmptyState = !showTable && !message
+  const showEmptyState = !showTable && !infoMessage
 
   return (
     <Card className="w-full">
@@ -71,16 +70,11 @@ export function SearchContainer() {
           onSearchResults={handleSearchResults}
         />
         
-        {/* Status messages */}
-        {message && (
-          <Alert 
-            variant={message.type === 'warning' ? 'destructive' : 'default'} 
-            className={`${message.type === 'success' ? 'bg-green-50 text-green-800 border-green-200' : ''}`}
-          >
-            {message.type === 'info' && <Info className="h-4 w-4" />}
-            {message.type === 'warning' && <AlertCircle className="h-4 w-4" />}
-            {message.type === 'success' && <Info className="h-4 w-4 text-green-800" />}
-            <AlertDescription>{message.text}</AlertDescription>
+        {/* Info message within the card (for search-related messages) */}
+        {infoMessage && (
+          <Alert variant="default">
+            <Info className="h-4 w-4" />
+            <AlertDescription>{infoMessage}</AlertDescription>
           </Alert>
         )}
         
@@ -103,6 +97,26 @@ export function SearchContainer() {
             <CardDescription className="max-w-md">
               Enter a ticker symbol, company name, or keyword in the search box above to find securities.
             </CardDescription>
+          </div>
+        )}
+        
+        {/* Toast-like error messages in the bottom-right corner */}
+        {errorMessage && (
+          <div className="fixed bottom-4 right-4 z-50 max-w-sm">
+            <Alert 
+              variant="destructive" 
+              className="bg-red-50 text-red-800 border-red-200 shadow-lg flex items-center gap-2"
+            >
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription className="flex-1">{errorMessage}</AlertDescription>
+              <button 
+                onClick={() => setErrorMessage(null)} 
+                className="text-red-600 hover:text-red-800"
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </button>
+            </Alert>
           </div>
         )}
       </CardContent>

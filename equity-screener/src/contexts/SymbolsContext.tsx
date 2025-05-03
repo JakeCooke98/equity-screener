@@ -9,6 +9,7 @@ interface SymbolsContextType {
   removeSymbol: (symbol: SymbolSearchMatch) => void
   clearSymbols: () => void
   isSymbolSelected: (symbol: SymbolSearchMatch) => boolean
+  toggleSymbol: (symbol: SymbolSearchMatch) => void
 }
 
 const SymbolsContext = createContext<SymbolsContextType | undefined>(undefined)
@@ -38,6 +39,22 @@ export function SymbolsProvider({ children }: { children: ReactNode }) {
     )
   }
 
+  // Toggle function that adds or removes based on current state
+  const toggleSymbol = (symbol: SymbolSearchMatch) => {
+    const isAlreadySelected = isSymbolSelected(symbol)
+    
+    if (isAlreadySelected) {
+      // If already selected, remove it
+      removeSymbol(symbol)
+    } else {
+      // If not selected and we're below limit, add it
+      if (selectedSymbols.length < 5) {
+        addSymbol(symbol)
+      }
+      // If at limit, do nothing (the calling code will show an error message)
+    }
+  }
+
   const clearSymbols = () => {
     setSelectedSymbols([])
   }
@@ -55,7 +72,8 @@ export function SymbolsProvider({ children }: { children: ReactNode }) {
         addSymbol, 
         removeSymbol, 
         clearSymbols,
-        isSymbolSelected 
+        isSymbolSelected,
+        toggleSymbol
       }}
     >
       {children}
