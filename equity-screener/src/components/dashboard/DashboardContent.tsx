@@ -103,7 +103,14 @@ export function DashboardContent() {
         if (timeSeriesData[symbol.symbol]) {
           const point = timeSeriesData[symbol.symbol].data.find(p => p.date === date)
           if (point) {
-            dataPoint[symbol.symbol] = point.close
+            // Ensure price is a valid number
+            const price = typeof point.close === 'number' ? point.close : parseFloat(point.close as any)
+            
+            // Only add valid numbers to avoid chart display issues
+            if (!isNaN(price) && isFinite(price)) {
+              // Format to 2 decimal places for consistency
+              dataPoint[symbol.symbol] = parseFloat(price.toFixed(2))
+            }
           }
         }
       })

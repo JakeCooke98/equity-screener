@@ -81,7 +81,9 @@ export function ComparisonChart({ data, type, symbols, className }: ComparisonCh
                     isMatching && "bg-green-100 px-1 rounded text-green-800"
                   )}
                 >
-                  {entry.value}
+                  {typeof entry.value === 'number' 
+                    ? entry.value.toFixed(2) 
+                    : entry.value}
                 </span>
               </div>
             )
@@ -129,14 +131,47 @@ export function ComparisonChart({ data, type, symbols, className }: ComparisonCh
     )
   }, [symbols, activeSymbol])
 
-  // Calculate domain padding for the YAxis
+  // Calculate domain for the YAxis properly
   const allValues = data.flatMap(entry => 
     symbols.map(symbol => entry[symbol.symbol])
-  ).filter(Boolean)
+  ).filter(value => value !== undefined && value !== null)
 
+  // Calculate min and max with proper padding to avoid edge issues
   const minValue = Math.min(...allValues)
   const maxValue = Math.max(...allValues)
-  const padding = (maxValue - minValue) * 0.1
+  
+  // Calculate a reasonable padding based on the range and values
+  const range = maxValue - minValue
+  let padding: number
+  
+  if (range === 0) {
+    // If all values are the same, create a reasonable range
+    padding = Math.max(maxValue * 0.1, 10)
+  } else if (range < 1) {
+    // For small ranges (less than 1), use a percentage of the max
+    padding = Math.max(range * 0.2, maxValue * 0.05)
+  } else {
+    // For normal ranges, use a percentage of the range
+    padding = range * 0.1
+  }
+  
+  // Determine min and max for the y-axis with padding
+  const yAxisMin = Math.max(0, minValue - padding) // Never go below 0 for stock prices
+  const yAxisMax = maxValue + padding
+
+  // Format y-axis ticks to show proper decimal places
+  const formatYAxisTick = (value: number) => {
+    if (maxValue < 10) {
+      // Use 2 decimal places for small values
+      return value.toFixed(2)
+    } else if (maxValue < 100) {
+      // Use 1 decimal place for medium values
+      return value.toFixed(1)
+    } else {
+      // Use whole numbers for large values
+      return value.toFixed(0)
+    }
+  }
 
   return (
     <div className={cn("w-full", className)}>
@@ -150,9 +185,12 @@ export function ComparisonChart({ data, type, symbols, className }: ComparisonCh
               tickLine={{ stroke: '#e2e8f0' }}
             />
             <YAxis 
-              domain={[minValue - padding, maxValue + padding]} 
+              domain={[yAxisMin, yAxisMax]} 
               tick={{ fontSize: 12 }}
               tickLine={{ stroke: '#e2e8f0' }}
+              tickFormatter={formatYAxisTick}
+              width={60} // Ensure enough space for tick labels
+              allowDecimals={true}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend content={renderLegend} />
@@ -168,14 +206,7 @@ export function ComparisonChart({ data, type, symbols, className }: ComparisonCh
                 activeDot={{ r: 6, strokeWidth: 2 }}
                 onMouseEnter={handleMouseEnter}
                 onMouseLeave={handleMouseLeave}
-                strokeDasharray={
-                  symbols.some(
-                    s => s !== symbol && 
-                    data.some(entry => entry[s.symbol] === entry[symbol.symbol])
-                  ) 
-                    ? "0" 
-                    : "0"
-                }
+                connectNulls={true}
               />
             ))}
           </LineChart>
@@ -188,9 +219,12 @@ export function ComparisonChart({ data, type, symbols, className }: ComparisonCh
               tickLine={{ stroke: '#e2e8f0' }}
             />
             <YAxis 
-              domain={[minValue - padding, maxValue + padding]} 
+              domain={[yAxisMin, yAxisMax]} 
               tick={{ fontSize: 12 }}
               tickLine={{ stroke: '#e2e8f0' }}
+              tickFormatter={formatYAxisTick}
+              width={60} // Ensure enough space for tick labels
+              allowDecimals={true}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend content={renderLegend} />
