@@ -2,23 +2,30 @@ import { SearchContainer } from "@/components/search/SearchContainer";
 
 export default function Home() {
   return (
-    <div className="flex flex-col items-center min-h-screen p-6 gap-8">
-      <header className="w-full max-w-7xl flex flex-col items-center gap-6 pt-8">
-        <h1 className="text-3xl font-bold">Equity Screener</h1>
-        <p className="text-muted-foreground text-center max-w-2xl">
-          Search for stocks, ETFs, and other securities using Alpha Vantage data.
-          Get real-time information and detailed analytics.
-        </p>
+    <div className="flex min-h-screen flex-col">
+      <header className="flex h-16 items-center border-b px-6 md:px-10">
+        <h1 className="text-xl font-bold">Equity Screener</h1>
       </header>
       
-      <main className="w-full max-w-3xl flex flex-col gap-8">
+      <main className="flex-1 py-8 px-6 md:px-10 max-w-7xl mx-auto w-full">
+        <div className="flex flex-col gap-3 mb-6">
+          <h2 className="text-3xl font-bold tracking-tight">Stock Finder</h2>
+          <p className="text-muted-foreground text-lg max-w-3xl">
+            Search for stocks, ETFs, and other securities using Alpha Vantage data.
+          </p>
+        </div>
         <SearchContainer />
-        
-        {/* Results table will be added in step 2 */}
       </main>
       
-      <footer className="mt-auto py-6 text-center text-sm text-muted-foreground">
-        <p>Powered by Alpha Vantage API</p>
+      <footer className="py-6 px-6 md:px-10 border-t">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 max-w-7xl mx-auto w-full">
+          <p className="text-sm text-muted-foreground">
+            &copy; {new Date().getFullYear()} Equity Screener. Powered by Alpha Vantage API.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Built with Next.js, Tailwind CSS, and Shadcn UI
+          </p>
+        </div>
       </footer>
     </div>
   );
