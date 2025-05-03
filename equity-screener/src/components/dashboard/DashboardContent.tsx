@@ -1,7 +1,7 @@
 'use client'
 
 import { useSymbols } from '@/contexts/SymbolsContext'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChartBarIcon, ChartLineIcon, Loader2 } from 'lucide-react'
@@ -10,6 +10,7 @@ import { AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { SymbolChips } from './SymbolChips'
 import { ComparisonChart } from './ComparisonChart'
+import { TimeSeriesData, fetchTimeSeriesData } from '@/services/alphaVantage'
 
 type ChartType = 'line' | 'bar'
 
@@ -17,40 +18,110 @@ export function DashboardContent() {
   const { selectedSymbols, clearSymbols } = useSymbols()
   const [chartType, setChartType] = useState<ChartType>('line')
   const [isLoading, setIsLoading] = useState(false)
+  const [timeSeriesData, setTimeSeriesData] = useState<Record<string, TimeSeriesData>>({})
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  // Generate some sample data for the selected symbols
-  // In a real app, this would come from an API
-  const generateDemoData = () => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-    const data = []
-
-    for (let i = 0; i < 12; i++) {
-      const entry: Record<string, any> = {
-        name: months[i],
+  // Fetch time series data for selected symbols
+  useEffect(() => {
+    const fetchData = async () => {
+      // Only fetch if we have at least one symbol selected
+      if (selectedSymbols.length === 0) {
+        return
       }
-
-      // Add a value for each selected symbol
-      selectedSymbols.forEach(symbol => {
-        // Generate a random value between 50 and 200, with some consistency
-        // based on the symbol and month to simulate real data patterns
-        const baseValue = (symbol.symbol.charCodeAt(0) * 2) % 100 + 50
-        const monthInfluence = (i * 5) % 30
-        const randomness = Math.random() * 30 - 15
+      
+      setIsLoading(true)
+      setError(null)
+      
+      try {
+        // Create a new object to store the results
+        const newData: Record<string, TimeSeriesData> = {}
         
-        entry[symbol.symbol] = Math.round(baseValue + monthInfluence + randomness)
-      })
-
-      data.push(entry)
+        // Fetch data for each symbol
+        for (const symbol of selectedSymbols) {
+          // Skip if we already have data for this symbol
+          if (timeSeriesData[symbol.symbol]) {
+            newData[symbol.symbol] = timeSeriesData[symbol.symbol]
+            continue
+          }
+          
+          try {
+            const data = await fetchTimeSeriesData(symbol.symbol)
+            newData[symbol.symbol] = data
+          } catch (err) {
+            console.error(`Error fetching data for ${symbol.symbol}:`, err)
+            // Continue with other symbols even if one fails
+          }
+        }
+        
+        setTimeSeriesData(prevData => ({
+          ...prevData,
+          ...newData
+        }))
+      } catch (err) {
+        console.error('Error fetching time series data:', err)
+        setError('Failed to fetch price data. Please try again later.')
+      } finally {
+        setIsLoading(false)
+      }
     }
+    
+    fetchData()
+  }, [selectedSymbols])
 
-    return data
+  // Process the time series data into the format needed for charts
+  const processChartData = () => {
+    // Check if we have data for the selected symbols
+    const hasData = selectedSymbols.some(symbol => timeSeriesData[symbol.symbol])
+    
+    // Return empty array if we're still loading or missing data
+    if (isLoading || !hasData) {
+      return []
+    }
+    
+    // Get all unique dates from all symbols
+    const allDates = new Set<string>()
+    selectedSymbols.forEach(symbol => {
+      if (timeSeriesData[symbol.symbol]) {
+        timeSeriesData[symbol.symbol].data.forEach(point => {
+          allDates.add(point.date)
+        })
+      }
+    })
+    
+    // Sort dates in ascending order
+    const sortedDates = Array.from(allDates).sort()
+    
+    // Create data points for each date
+    return sortedDates.map(date => {
+      const dataPoint: Record<string, any> = {
+        name: formatDate(date)
+      }
+      
+      // Add close price for each symbol
+      selectedSymbols.forEach(symbol => {
+        if (timeSeriesData[symbol.symbol]) {
+          const point = timeSeriesData[symbol.symbol].data.find(p => p.date === date)
+          if (point) {
+            dataPoint[symbol.symbol] = point.close
+          }
+        }
+      })
+      
+      return dataPoint
+    })
+  }
+  
+  // Format date from YYYY-MM-DD to MMM YYYY
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
   }
 
-  const chartData = generateDemoData()
+  const chartData = processChartData()
 
-  // Check if we have enough symbols selected
-  const hasMinSymbols = selectedSymbols.length >= 3
+  // Check if we have any symbols selected and data to display
+  const hasSymbols = selectedSymbols.length > 0
   const hasMaxSymbols = selectedSymbols.length >= 5
 
   return (
@@ -60,7 +131,7 @@ export function DashboardContent() {
         <CardHeader className="px-6 pb-3 pt-6">
           <CardTitle>Selected Securities</CardTitle>
           <CardDescription>
-            Select 3-5 symbols to compare in the dashboard. Currently selected: {selectedSymbols.length}
+            Select up to 5 symbols to compare in the dashboard. Currently selected: {selectedSymbols.length}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 px-6 pb-6">
@@ -90,7 +161,7 @@ export function DashboardContent() {
       </Card>
 
       {/* Chart section */}
-      {hasMinSymbols ? (
+      {hasSymbols ? (
         <Card className="w-full">
           <CardHeader className="px-6 pb-3 pt-6">
             <div className="flex items-center justify-between">
@@ -115,13 +186,22 @@ export function DashboardContent() {
               </div>
             </div>
             <CardDescription>
-              Comparing price data for selected securities over the last 12 months
+              Comparing closing prices for selected securities (last 12 months)
             </CardDescription>
           </CardHeader>
           <CardContent className="px-6 pb-6">
             {isLoading ? (
               <div className="flex justify-center items-center h-80">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : error ? (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : chartData.length === 0 ? (
+              <div className="flex justify-center items-center h-80 text-muted-foreground">
+                No data available for the selected symbols
               </div>
             ) : (
               <ComparisonChart
@@ -137,7 +217,7 @@ export function DashboardContent() {
         <Alert variant="default" className="bg-muted/50">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Please select at least 3 symbols to display comparison charts
+            Please select at least one symbol to display price charts
           </AlertDescription>
         </Alert>
       )}

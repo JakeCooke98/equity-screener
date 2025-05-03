@@ -6,18 +6,32 @@
  */
 
 import { mockSymbolSearchResults } from "@/utils/mockData";
+import { mockTimeSeriesData } from "@/utils/mockTimeSeriesData";
 
 export interface SymbolSearchMatch {
   symbol: string;
   name: string;
   type: string;
   region: string;
-  country: string;
   marketOpen: string;
   marketClose: string;
   timezone: string;
   currency: string;
   matchScore: string;
+}
+
+export interface TimeSeriesDataPoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+export interface TimeSeriesData {
+  symbol: string;
+  data: TimeSeriesDataPoint[];
 }
 
 interface SymbolSearchResponse {
@@ -26,12 +40,11 @@ interface SymbolSearchResponse {
     "2. name": string;
     "3. type": string;
     "4. region": string;
-    "5. country": string;
-    "6. marketOpen": string;
-    "7. marketClose": string;
-    "8. timezone": string;
-    "9. currency": string;
-    "10. matchScore": string;
+    "5. marketOpen": string;
+    "6. marketClose": string;
+    "7. timezone": string;
+    "8. currency": string;
+    "9. matchScore": string;
   }>;
 }
 
@@ -47,8 +60,8 @@ const API_BASE_URL = 'https://www.alphavantage.co/query';
 // For development, we'll use environment variables
 const API_KEY = process.env.NEXT_PUBLIC_ALPHA_VANTAGE_API_KEY || '';
 
-// Flag to use mock data (useful during development)
-const USE_MOCK_DATA = process.env.NODE_ENV === 'development' || !API_KEY || API_KEY === 'your_api_key_here';
+// Flag to use mock data (only as fallback when API key is missing)
+const USE_MOCK_DATA = !API_KEY || API_KEY === 'your_api_key_here' || process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
 
 /**
  * Searches for symbols matching the given keywords
@@ -61,68 +74,228 @@ export async function searchSymbols(keywords: string): Promise<SymbolSearchMatch
     return [];
   }
 
-  // Use mock data in development if API key is not set
-  if (USE_MOCK_DATA) {
-    console.log('Using mock data for symbol search');
-    
-    // Filter mock data based on the keywords (case insensitive)
-    const lowercaseKeywords = keywords.toLowerCase();
-    const filteredResults = mockSymbolSearchResults.filter(
-      (match: SymbolSearchMatch) => 
-        match.symbol.toLowerCase().includes(lowercaseKeywords) || 
-        match.name.toLowerCase().includes(lowercaseKeywords)
-    );
-    
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    return filteredResults;
-  }
-
   try {
-    const url = new URL(API_BASE_URL);
-    url.searchParams.append('function', 'SYMBOL_SEARCH');
-    url.searchParams.append('keywords', keywords);
-    url.searchParams.append('apikey', API_KEY);
+    // Try to use the API first when we have a key
+    if (API_KEY && API_KEY !== 'your_api_key_here') {
+      const url = new URL(API_BASE_URL);
+      url.searchParams.append('function', 'SYMBOL_SEARCH');
+      url.searchParams.append('keywords', keywords);
+      url.searchParams.append('apikey', API_KEY);
 
-    const response = await fetch(url.toString());
+      const response = await fetch(url.toString());
 
-    if (!response.ok) {
-      throw {
-        message: `API request failed with status ${response.status}`,
-        status: response.status
-      };
+      if (!response.ok) {
+        throw {
+          message: `API request failed with status ${response.status}`,
+          status: response.status
+        };
+      }
+
+      const data = await response.json() as SymbolSearchResponse;
+
+      // Check for API error response
+      if ('Error Message' in data) {
+        throw {
+          message: data['Error Message'] as string
+        };
+      }
+
+      // If bestMatches is undefined, return empty array
+      if (!data.bestMatches) {
+        return [];
+      }
+
+      // Transform the API response to our internal format
+      return data.bestMatches.map(match => ({
+        symbol: match["1. symbol"],
+        name: match["2. name"],
+        type: match["3. type"],
+        region: match["4. region"],
+        marketOpen: match["5. marketOpen"],
+        marketClose: match["6. marketClose"],
+        timezone: match["7. timezone"],
+        currency: match["8. currency"],
+        matchScore: match["9. matchScore"],
+      }));
+    }
+    
+    // Fall back to mock data if API call fails or no API key
+    if (USE_MOCK_DATA) {
+      console.log('Using mock data for symbol search (API key missing or invalid)');
+      
+      // Filter mock data based on the keywords (case insensitive)
+      const lowercaseKeywords = keywords.toLowerCase();
+      const filteredResults = mockSymbolSearchResults.filter(
+        (match: SymbolSearchMatch) => 
+          match.symbol.toLowerCase().includes(lowercaseKeywords) || 
+          match.name.toLowerCase().includes(lowercaseKeywords)
+      );
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      return filteredResults;
     }
 
-    const data = await response.json() as SymbolSearchResponse;
-
-    // Check for API error response
-    if ('Error Message' in data) {
-      throw {
-        message: data['Error Message'] as string
-      };
-    }
-
-    // If bestMatches is undefined, return empty array
-    if (!data.bestMatches) {
-      return [];
-    }
-
-    // Transform the API response to our internal format
-    return data.bestMatches.map(match => ({
-      symbol: match["1. symbol"],
-      name: match["2. name"],
-      type: match["3. type"],
-      region: match["4. region"],
-      country: match["5. country"],
-      marketOpen: match["6. marketOpen"],
-      marketClose: match["7. marketClose"],
-      timezone: match["8. timezone"],
-      currency: match["9. currency"],
-      matchScore: match["10. matchScore"],
-    }));
+    // If we get here, we have no API key and mock data is disabled
+    throw {
+      message: 'API key is required for this operation'
+    };
   } catch (error) {
     console.error('Error searching symbols:', error);
+    
+    // If API fails but we have mock data enabled as fallback, use it
+    if (USE_MOCK_DATA) {
+      console.log('Falling back to mock data after API failure');
+      const lowercaseKeywords = keywords.toLowerCase();
+      const filteredResults = mockSymbolSearchResults.filter(
+        (match: SymbolSearchMatch) => 
+          match.symbol.toLowerCase().includes(lowercaseKeywords) || 
+          match.name.toLowerCase().includes(lowercaseKeywords)
+      );
+      return filteredResults;
+    }
+    
     throw error;
   }
+}
+
+/**
+ * Fetches time series data for the given symbol
+ * 
+ * @param symbol The stock symbol to fetch data for
+ * @returns A promise that resolves to time series data
+ */
+export async function fetchTimeSeriesData(symbol: string): Promise<TimeSeriesData> {
+  try {
+    // Try to use the API first when we have a key
+    if (API_KEY && API_KEY !== 'your_api_key_here') {
+      const url = new URL(API_BASE_URL);
+      // Use Monthly time series as specified
+      url.searchParams.append('function', 'TIME_SERIES_MONTHLY');
+      url.searchParams.append('symbol', symbol);
+      url.searchParams.append('apikey', API_KEY);
+
+      console.log(`Fetching time series data for ${symbol} from Alpha Vantage API`);
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        throw {
+          message: `API request failed with status ${response.status}`,
+          status: response.status
+        };
+      }
+
+      const data = await response.json();
+
+      // Check for API error response
+      if ('Error Message' in data) {
+        throw {
+          message: data['Error Message'] as string
+        };
+      }
+
+      // Parse the time series data
+      const timeSeriesData: TimeSeriesDataPoint[] = [];
+      const monthlyTimeSeries = data['Monthly Time Series'];
+      
+      if (!monthlyTimeSeries) {
+        throw {
+          message: 'No time series data found'
+        };
+      }
+      
+      // Get the last 12 months of data
+      const dates = Object.keys(monthlyTimeSeries).sort().reverse().slice(0, 12);
+      
+      for (const date of dates) {
+        const entry = monthlyTimeSeries[date];
+        timeSeriesData.push({
+          date,
+          open: parseFloat(entry['1. open']),
+          high: parseFloat(entry['2. high']),
+          low: parseFloat(entry['3. low']),
+          close: parseFloat(entry['4. close']),
+          volume: parseInt(entry['5. volume']),
+        });
+      }
+
+      return {
+        symbol,
+        data: timeSeriesData,
+      };
+    }
+    
+    // Fall back to mock data if no API key
+    if (USE_MOCK_DATA) {
+      console.log(`Using mock data for ${symbol} time series (API key missing or invalid)`);
+      
+      // Find mock data for this symbol or generate some if not found
+      const mockData = mockTimeSeriesData[symbol] || generateMockTimeSeriesData(symbol);
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      return {
+        symbol,
+        data: mockData,
+      };
+    }
+
+    // If we get here, we have no API key and mock data is disabled
+    throw {
+      message: 'API key is required for this operation'
+    };
+  } catch (error) {
+    console.error(`Error fetching time series data for ${symbol}:`, error);
+    
+    // If API fails but we have mock data enabled as fallback, use it
+    if (USE_MOCK_DATA) {
+      console.log(`Falling back to mock data for ${symbol} after API failure`);
+      const mockData = mockTimeSeriesData[symbol] || generateMockTimeSeriesData(symbol);
+      return {
+        symbol,
+        data: mockData,
+      };
+    }
+    
+    throw error;
+  }
+}
+
+/**
+ * Generate mock time series data for a symbol
+ * Used when no mock data is available and API is disabled
+ */
+function generateMockTimeSeriesData(symbol: string): TimeSeriesDataPoint[] {
+  const data: TimeSeriesDataPoint[] = [];
+  const today = new Date();
+  
+  // Generate last 12 months of data
+  for (let i = 0; i < 12; i++) {
+    const date = new Date(today);
+    date.setMonth(today.getMonth() - i);
+    
+    // Generate some base values using the symbol's characters
+    const baseValue = (symbol.charCodeAt(0) * 2) % 100 + 50;
+    const variance = (i * 3) % 20;
+    
+    // Add some random variance based on the month
+    const close = baseValue + variance + (Math.random() * 10);
+    const open = close - (Math.random() * 5);
+    const high = close + (Math.random() * 3);
+    const low = open - (Math.random() * 3);
+    const volume = Math.round(100000 + Math.random() * 1000000);
+    
+    data.push({
+      date: date.toISOString().split('T')[0],
+      open,
+      high,
+      low,
+      close,
+      volume,
+    });
+  }
+  
+  return data;
 } 

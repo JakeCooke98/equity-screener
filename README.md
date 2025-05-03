@@ -57,12 +57,19 @@ npm run dev
 
 5. Open your browser and navigate to `http://localhost:3000`
 
-### Using Mock Data
+### API Usage and Mock Data
 
-During development, you can use mock data to avoid hitting the Alpha Vantage API rate limits:
+The application uses the Alpha Vantage API for both symbol search and time series data:
 
-- The app will automatically use mock data if no API key is provided in development mode.
-- To use the actual API, make sure to add your API key to the `.env.local` file.
+- **Symbol Search API**: Used to find matching stocks, ETFs, and other securities
+- **Time Series Monthly API**: Used to fetch monthly OHLCV price data for the dashboard charts
+
+By default, the application prioritizes using the actual API when an API key is available. Mock data is only used as a fallback in the following cases:
+- When no API key is provided
+- When the API key is invalid or the API request fails
+- When `NEXT_PUBLIC_USE_MOCK_DATA=true` is set in your environment (for testing/development)
+
+**Note on API Limits**: The free tier of Alpha Vantage has a limit of 5 requests per minute and 500 requests per day. The app includes caching mechanisms to minimize API calls, but be aware of these limitations during use.
 
 ## Project Structure
 
