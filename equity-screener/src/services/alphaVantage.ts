@@ -12,6 +12,7 @@ export interface SymbolSearchMatch {
   name: string;
   type: string;
   region: string;
+  country: string;
   marketOpen: string;
   marketClose: string;
   timezone: string;
@@ -25,11 +26,12 @@ interface SymbolSearchResponse {
     "2. name": string;
     "3. type": string;
     "4. region": string;
-    "5. marketOpen": string;
-    "6. marketClose": string;
-    "7. timezone": string;
-    "8. currency": string;
-    "9. matchScore": string;
+    "5. country": string;
+    "6. marketOpen": string;
+    "7. marketClose": string;
+    "8. timezone": string;
+    "9. currency": string;
+    "10. matchScore": string;
   }>;
 }
 
@@ -112,11 +114,12 @@ export async function searchSymbols(keywords: string): Promise<SymbolSearchMatch
       name: match["2. name"],
       type: match["3. type"],
       region: match["4. region"],
-      marketOpen: match["5. marketOpen"],
-      marketClose: match["6. marketClose"],
-      timezone: match["7. timezone"],
-      currency: match["8. currency"],
-      matchScore: match["9. matchScore"],
+      country: match["5. country"],
+      marketOpen: match["6. marketOpen"],
+      marketClose: match["7. marketClose"],
+      timezone: match["8. timezone"],
+      currency: match["9. currency"],
+      matchScore: match["10. matchScore"],
     }));
   } catch (error) {
     console.error('Error searching symbols:', error);
