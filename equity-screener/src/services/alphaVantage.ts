@@ -60,8 +60,11 @@ const API_BASE_URL = 'https://www.alphavantage.co/query';
 // For development, we'll use environment variables
 const API_KEY = process.env.NEXT_PUBLIC_ALPHA_VANTAGE_API_KEY || '';
 
-// Flag to use mock data (only as fallback when API key is missing)
-const USE_MOCK_DATA = !API_KEY || API_KEY === 'your_api_key_here' || process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true';
+// Flag to use mock data when:
+// 1. NEXT_PUBLIC_USE_MOCK_DATA is explicitly set to 'true' (highest priority)
+// 2. No API key is provided
+// 3. A placeholder API key is used
+const USE_MOCK_DATA = process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true' || !API_KEY || API_KEY === 'your_api_key_here';
 
 /**
  * Searches for symbols matching the given keywords
@@ -75,13 +78,32 @@ export async function searchSymbols(keywords: string): Promise<SymbolSearchMatch
   }
 
   try {
-    // Try to use the API first when we have a key
+    // Check if we should use mock data first (prioritize the environment variable setting)
+    if (USE_MOCK_DATA) {
+      console.log('Using mock data for symbol search (enforced by environment variable or missing API key)');
+      
+      // Filter mock data based on the keywords (case insensitive)
+      const lowercaseKeywords = keywords.toLowerCase();
+      const filteredResults = mockSymbolSearchResults.filter(
+        (match: SymbolSearchMatch) => 
+          match.symbol.toLowerCase().includes(lowercaseKeywords) || 
+          match.name.toLowerCase().includes(lowercaseKeywords)
+      );
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      return filteredResults;
+    }
+    
+    // Try to use the API when we have a key and mock data is not forced
     if (API_KEY && API_KEY !== 'your_api_key_here') {
       const url = new URL(API_BASE_URL);
       url.searchParams.append('function', 'SYMBOL_SEARCH');
       url.searchParams.append('keywords', keywords);
       url.searchParams.append('apikey', API_KEY);
 
+      console.log(`Searching for symbols with query "${keywords}" using Alpha Vantage API`);
       const response = await fetch(url.toString());
 
       if (!response.ok) {
@@ -118,24 +140,6 @@ export async function searchSymbols(keywords: string): Promise<SymbolSearchMatch
         matchScore: match["9. matchScore"],
       }));
     }
-    
-    // Fall back to mock data if API call fails or no API key
-    if (USE_MOCK_DATA) {
-      console.log('Using mock data for symbol search (API key missing or invalid)');
-      
-      // Filter mock data based on the keywords (case insensitive)
-      const lowercaseKeywords = keywords.toLowerCase();
-      const filteredResults = mockSymbolSearchResults.filter(
-        (match: SymbolSearchMatch) => 
-          match.symbol.toLowerCase().includes(lowercaseKeywords) || 
-          match.name.toLowerCase().includes(lowercaseKeywords)
-      );
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      return filteredResults;
-    }
 
     // If we get here, we have no API key and mock data is disabled
     throw {
@@ -168,7 +172,23 @@ export async function searchSymbols(keywords: string): Promise<SymbolSearchMatch
  */
 export async function fetchTimeSeriesData(symbol: string): Promise<TimeSeriesData> {
   try {
-    // Try to use the API first when we have a key
+    // Check if we should use mock data first (prioritize the environment variable setting)
+    if (USE_MOCK_DATA) {
+      console.log(`Using mock data for ${symbol} time series (enforced by environment variable or missing API key)`);
+      
+      // Find mock data for this symbol or generate some if not found
+      const mockData = mockTimeSeriesData[symbol] || generateMockTimeSeriesData(symbol);
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      return {
+        symbol,
+        data: mockData,
+      };
+    }
+    
+    // Try to use the API when we have a key and mock data is not forced
     if (API_KEY && API_KEY !== 'your_api_key_here') {
       const url = new URL(API_BASE_URL);
       // Use Monthly time series as specified
@@ -223,22 +243,6 @@ export async function fetchTimeSeriesData(symbol: string): Promise<TimeSeriesDat
       return {
         symbol,
         data: timeSeriesData,
-      };
-    }
-    
-    // Fall back to mock data if no API key
-    if (USE_MOCK_DATA) {
-      console.log(`Using mock data for ${symbol} time series (API key missing or invalid)`);
-      
-      // Find mock data for this symbol or generate some if not found
-      const mockData = mockTimeSeriesData[symbol] || generateMockTimeSeriesData(symbol);
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      return {
-        symbol,
-        data: mockData,
       };
     }
 
