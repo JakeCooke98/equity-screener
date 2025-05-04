@@ -7,6 +7,7 @@
 
 import { mockSymbolSearchResults } from "@/utils/mockData";
 import { generateMockQuoteData } from "@/utils/mockQuoteData";
+import { generateMockCompanyNews, generateMockCompanyOverview } from "@/utils/mockStockData";
 import { mockTimeSeriesData } from "@/utils/mockTimeSeriesData";
 
 export interface SymbolSearchMatch {
@@ -403,5 +404,179 @@ export async function fetchStockQuote(symbol: string): Promise<StockQuoteData> {
     }
     
     throw error;
+  }
+}
+
+// Interface for company overview data
+export interface CompanyOverview {
+  Symbol: string;
+  Name: string;
+  Description: string;
+  Exchange: string;
+  Currency: string;
+  Country: string;
+  Sector: string;
+  Industry: string;
+  MarketCapitalization: string;
+  PERatio: string;
+  DividendYield: string;
+  EPS: string;
+  Beta: string;
+  FiftyTwoWeekHigh: string;
+  FiftyTwoWeekLow: string;
+}
+
+// Interface for news article
+export interface NewsArticle {
+  title: string;
+  url: string;
+  summary: string;
+  source: string;
+  publishedAt: string;
+  image?: string;
+}
+
+/**
+ * Fetches company overview data for a given symbol
+ * 
+ * @param symbol The stock symbol to fetch company overview for
+ * @returns A promise that resolves to the company overview data
+ */
+export async function fetchCompanyOverview(symbol: string): Promise<CompanyOverview> {
+  try {
+    // Generate mock data in development to avoid hitting API rate limits
+    if (USE_MOCK_DATA) {
+      console.log(`Using mock data for ${symbol} company overview (enforced by environment variable or missing API key)`);
+      
+      // Generate mock company overview data
+      const mockOverview = generateMockCompanyOverview(symbol);
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      return mockOverview;
+    }
+    
+    // Try to use the API when we have a key and mock data is not forced
+    if (API_KEY && API_KEY !== 'your_api_key_here') {
+      const url = new URL(API_BASE_URL);
+      url.searchParams.append('function', 'OVERVIEW');
+      url.searchParams.append('symbol', symbol);
+      url.searchParams.append('apikey', API_KEY);
+
+      console.log(`Fetching company overview for ${symbol} from Alpha Vantage API`);
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        throw {
+          message: `API request failed with status ${response.status}`,
+          status: response.status
+        };
+      }
+
+      const data = await response.json();
+
+      // Check for API error response
+      if ('Error Message' in data) {
+        throw {
+          message: data['Error Message'] as string
+        };
+      }
+
+      // Check if we got empty data
+      if (!data.Symbol) {
+        throw {
+          message: 'No company overview found'
+        };
+      }
+
+      return data as CompanyOverview;
+    }
+
+    // If we get here, we have no API key and mock data is disabled
+    throw {
+      message: 'API key is required for this operation'
+    };
+  } catch (error) {
+    console.error('Error fetching company overview:', error);
+    // In case of any error, return mock data as fallback
+    return generateMockCompanyOverview(symbol);
+  }
+}
+
+/**
+ * Fetches news articles related to a given symbol
+ * 
+ * @param symbol The stock symbol to fetch news for
+ * @returns A promise that resolves to an array of news articles
+ */
+export async function fetchCompanyNews(symbol: string): Promise<NewsArticle[]> {
+  try {
+    // Generate mock data in development to avoid hitting API rate limits
+    if (USE_MOCK_DATA) {
+      console.log(`Using mock data for ${symbol} news (enforced by environment variable or missing API key)`);
+      
+      // Generate mock news data
+      const mockNews = generateMockCompanyNews(symbol);
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 700));
+      
+      return mockNews;
+    }
+    
+    // Try to use the API when we have a key and mock data is not forced
+    if (API_KEY && API_KEY !== 'your_api_key_here') {
+      const url = new URL(API_BASE_URL);
+      url.searchParams.append('function', 'NEWS_SENTIMENT');
+      url.searchParams.append('tickers', symbol);
+      url.searchParams.append('apikey', API_KEY);
+      url.searchParams.append('limit', '10'); // Limit to 10 news articles
+
+      console.log(`Fetching news for ${symbol} from Alpha Vantage API`);
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        throw {
+          message: `API request failed with status ${response.status}`,
+          status: response.status
+        };
+      }
+
+      const data = await response.json();
+
+      // Check for API error response
+      if ('Error Message' in data) {
+        throw {
+          message: data['Error Message'] as string
+        };
+      }
+
+      // Check if we got feed entries
+      if (!data.feed || !Array.isArray(data.feed)) {
+        throw {
+          message: 'No news data found'
+        };
+      }
+
+      // Transform the API response to our internal format
+      return data.feed.map((item: any) => ({
+        title: item.title,
+        url: item.url,
+        summary: item.summary,
+        source: item.source,
+        publishedAt: item.time_published,
+        image: item.banner_image || undefined
+      }));
+    }
+
+    // If we get here, we have no API key and mock data is disabled
+    throw {
+      message: 'API key is required for this operation'
+    };
+  } catch (error) {
+    console.error('Error fetching company news:', error);
+    // In case of any error, return mock data as fallback
+    return generateMockCompanyNews(symbol);
   }
 }
