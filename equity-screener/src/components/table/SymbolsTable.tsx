@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { 
   Table, 
   TableBody, 
@@ -45,7 +45,11 @@ export function SymbolsTable({
   
   // State for tooltip
   const [tooltipSymbol, setTooltipSymbol] = useState<string | null>(null)
-  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null)
+  const [tooltipPosition, setTooltipPosition] = useState<{
+    top: number;
+    left: number;
+    isAbove: boolean;
+  }>({ top: 0, left: 0, isAbove: false })
   const [isTooltipVisible, setIsTooltipVisible] = useState(false)
   
   // Use a timeout ref to delay showing/hiding tooltip
@@ -185,57 +189,56 @@ export function SymbolsTable({
       : <ChevronDown className="h-4 w-4 ml-1" />
   }
 
-  // Handle row hover to show tooltip
-  const handleRowMouseEnter = (symbol: string, event: React.MouseEvent) => {
+  // Adjust row hover/tooltip logic
+  const handleRowMouseEnter = useCallback((event: React.MouseEvent<HTMLTableRowElement>, symbol: string) => {
+    // If we don't have a valid symbol, don't show the tooltip
+    if (!symbol) return;
+    
     // Clear any existing timeout
     if (tooltipTimeoutRef.current) {
-      clearTimeout(tooltipTimeoutRef.current)
+      clearTimeout(tooltipTimeoutRef.current);
     }
 
-    // Get position information immediately when the event occurs
-    const row = event.currentTarget as HTMLElement
-    if (!row) {
-      return; // Exit if no element found
+    // Get row and container dimensions
+    const row = event.currentTarget;
+    const rowRect = row.getBoundingClientRect();
+    const rowCenterX = rowRect.left + rowRect.width / 2;
+    
+    // Calculate spaces above and below the row
+    const spaceBelow = window.innerHeight - rowRect.bottom;
+    const spaceAbove = rowRect.top;
+    
+    // Default tooltip width (used for centering calculations)
+    const tooltipWidth = 256; // 16rem/w-64
+    
+    // Calculate horizontal position with boundaries
+    let left = rowCenterX - (tooltipWidth / 2);
+    left = Math.max(10, Math.min(left, window.innerWidth - tooltipWidth - 10));
+    
+    // Determine if tooltip should go above or below based on available space
+    const minNeededSpace = 180; // minimum space needed for tooltip, can be adjusted
+    const isAbove = spaceBelow < minNeededSpace && spaceAbove > spaceBelow;
+    
+    // Calculate vertical position
+    let top;
+    if (isAbove) {
+      // Position above with 8px gap
+      top = rowRect.top - 8;
+    } else {
+      // Position below with 8px gap
+      top = rowRect.bottom + 8;
     }
-
-    try {
-      const rect = row.getBoundingClientRect()
-      
-      // Position tooltip below the row - consistent approach for both desktop and mobile
-      // Calculate row center for horizontal positioning
-      const rowCenterX = rect.left + (rect.width / 2)
-      
-      // Calculate viewport center to ensure tooltip is centered when possible
-      const viewportWidth = window.innerWidth
-      const tooltipWidth = 264 // w-64 = 16rem = 256px + 8px for border
-      
-      // Calculate optimal X position - try to center on row but keep within viewport
-      const tooltipX = Math.max(
-        20, // Minimum left margin
-        Math.min(
-          rowCenterX - (tooltipWidth / 2), // Center on row
-          viewportWidth - tooltipWidth - 20 // Maximum right position (with margin)
-        )
-      )
-      
-      // Position tooltip below the row with some margin
-      const tooltipY = rect.bottom + 8 // 8px margin below row
-      
-      // Hide any existing tooltip immediately
-      setIsTooltipVisible(false)
-      
-      // Set tooltip data and position
-      setTooltipSymbol(symbol)
-      setTooltipPosition({ x: tooltipX, y: tooltipY })
-      
-      // Show tooltip after a short delay
-      setTimeout(() => {
-        setIsTooltipVisible(true)
-      }, 80)
-    } catch (error) {
-      console.error('Error calculating tooltip position:', error)
-    }
-  }
+    
+    // Update tooltip data and position
+    setTooltipPosition({ top, left, isAbove });
+    setTooltipSymbol(symbol);
+    
+    // Show tooltip after a short delay to prevent flickering
+    // when quickly moving between rows
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setIsTooltipVisible(true);
+    }, 50);
+  }, []);
 
   // Handle row hover end to hide tooltip
   const handleRowMouseLeave = () => {
@@ -267,11 +270,18 @@ export function SymbolsTable({
             `result-${index}`}
           className={`cursor-pointer hover:bg-muted/50 ${isSelected ? 'bg-primary/5' : ''}`}
           onClick={() => handleRowClick(symbol, index)}
-          onMouseEnter={(e) => handleRowMouseEnter(symbol.symbol, e)}
+          onMouseEnter={(e) => handleRowMouseEnter(e, symbol.symbol)}
           onMouseLeave={handleRowMouseLeave}
           onTouchStart={(e) => {
             // For touch devices, show tooltip on touch
-            handleRowMouseEnter(symbol.symbol, e as unknown as React.MouseEvent)
+            // Cast the touch event properly to avoid type errors
+            const syntheticEvent = {
+              currentTarget: e.currentTarget,
+              preventDefault: e.preventDefault,
+              stopPropagation: e.stopPropagation
+            } as React.MouseEvent<HTMLTableRowElement>;
+            
+            handleRowMouseEnter(syntheticEvent, symbol.symbol);
           }}
           onTouchEnd={handleRowMouseLeave}
           onTouchCancel={handleRowMouseLeave}
@@ -359,217 +369,193 @@ export function SymbolsTable({
   }
 
   return (
-    <div className={cn("w-full space-y-4 relative", className)}>
-      <div className="rounded-md border shadow-sm">
-        {isSmallScreen && (
-          <div className="p-2 border-b bg-muted/30">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  Columns <ChevronDown className="ml-1 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem onClick={() => setVisibleColumns(['symbol', 'name', 'type', 'region'])}>
-                  Basic Info
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setVisibleColumns(['symbol', 'name', 'country', 'currency'])}>
-                  Location & Currency
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setVisibleColumns(['symbol', 'ticker', 'matchScore', 'type'])}>
-                  Tickers & Scores
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
-        
-        <div className="overflow-x-auto">
-          <Table>
-            {data.length > 0 && (
-              <TableCaption className="px-6 pb-2">
-                Showing {startIndex + 1} to {endIndex} of {data.length} results
-              </TableCaption>
-            )}
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                {visibleColumns.includes('symbol') && (
-                  <TableHead 
-                    className="px-6 font-semibold text-foreground cursor-pointer"
-                    onClick={() => handleSort('symbol')}
-                  >
-                    <div className="flex items-center">
-                      Symbol
-                      {getSortIcon('symbol')}
-                    </div>
-                  </TableHead>
-                )}
-                
-                {visibleColumns.includes('name') && (
-                  <TableHead 
-                    className="px-6 font-semibold text-foreground cursor-pointer"
-                    onClick={() => handleSort('name')}
-                  >
-                    <div className="flex items-center">
-                      Company Name
-                      {getSortIcon('name')}
-                    </div>
-                  </TableHead>
-                )}
-                
-                {visibleColumns.includes('ticker') && (
-                  <TableHead 
-                    className="px-6 font-semibold text-foreground cursor-pointer"
-                    onClick={() => handleSort('ticker')}
-                  >
-                    <div className="flex items-center">
-                      Bloomberg Ticker
-                      {getSortIcon('ticker')}
-                    </div>
-                  </TableHead>
-                )}
-                
-                {visibleColumns.includes('type') && (
-                  <TableHead 
-                    className="px-6 font-semibold text-foreground cursor-pointer"
-                    onClick={() => handleSort('type')}
-                  >
-                    <div className="flex items-center whitespace-nowrap">
-                      Asset Class
-                      {getSortIcon('type')}
-                    </div>
-                  </TableHead>
-                )}
-                
-                {visibleColumns.includes('region') && (
-                  <TableHead 
-                    className="px-6 font-semibold text-foreground cursor-pointer"
-                    onClick={() => handleSort('region')}
-                  >
-                    <div className="flex items-center">
-                      Region
-                      {getSortIcon('region')}
-                    </div>
-                  </TableHead>
-                )}
-                
-                {visibleColumns.includes('country') && (
-                  <TableHead 
-                    className="px-6 font-semibold text-foreground cursor-pointer"
-                    onClick={() => handleSort('country')}
-                  >
-                    <div className="flex items-center">
-                      Country
-                      {getSortIcon('country')}
-                    </div>
-                  </TableHead>
-                )}
-                
-                {visibleColumns.includes('currency') && (
-                  <TableHead 
-                    className="px-6 font-semibold text-foreground cursor-pointer"
-                    onClick={() => handleSort('currency')}
-                  >
-                    <div className="flex items-center">
-                      Currency
-                      {getSortIcon('currency')}
-                    </div>
-                  </TableHead>
-                )}
-                
-                {visibleColumns.includes('matchScore') && (
-                  <TableHead 
-                    className="px-6 font-semibold text-foreground cursor-pointer"
-                    onClick={() => handleSort('matchScore')}
-                  >
-                    <div className="flex items-center">
-                      Match Score
-                      {getSortIcon('matchScore')}
-                    </div>
-                  </TableHead>
-                )}
-                
-                <TableHead className="px-6 w-[80px] text-right font-semibold text-foreground">
-                  Action
+    <div className="w-full">
+      <div className="rounded-md border overflow-auto relative">
+        <Table>
+          {data.length > 0 && (
+            <TableCaption className="px-6 pb-2">
+              Showing {startIndex + 1} to {endIndex} of {data.length} results
+            </TableCaption>
+          )}
+          <TableHeader className="bg-muted/50">
+            <TableRow>
+              {visibleColumns.includes('symbol') && (
+                <TableHead 
+                  className="px-6 font-semibold text-foreground cursor-pointer"
+                  onClick={() => handleSort('symbol')}
+                >
+                  <div className="flex items-center">
+                    Symbol
+                    {getSortIcon('symbol')}
+                  </div>
                 </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                // Loading state
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={`loading-${i}`} className="animate-pulse">
-                    {visibleColumns.map((column, idx) => (
-                      <TableCell key={`loading-${i}-${column}`} className="px-6 py-4">
-                        <div className="h-4 w-16 bg-muted rounded"></div>
-                      </TableCell>
-                    ))}
-                    <TableCell className="px-6 py-4 text-right">
-                      <div className="h-4 w-8 bg-muted rounded ml-auto"></div>
+              )}
+              
+              {visibleColumns.includes('name') && (
+                <TableHead 
+                  className="px-6 font-semibold text-foreground cursor-pointer"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center">
+                    Company Name
+                    {getSortIcon('name')}
+                  </div>
+                </TableHead>
+              )}
+              
+              {visibleColumns.includes('ticker') && (
+                <TableHead 
+                  className="px-6 font-semibold text-foreground cursor-pointer"
+                  onClick={() => handleSort('ticker')}
+                >
+                  <div className="flex items-center">
+                    Bloomberg Ticker
+                    {getSortIcon('ticker')}
+                  </div>
+                </TableHead>
+              )}
+              
+              {visibleColumns.includes('type') && (
+                <TableHead 
+                  className="px-6 font-semibold text-foreground cursor-pointer"
+                  onClick={() => handleSort('type')}
+                >
+                  <div className="flex items-center whitespace-nowrap">
+                    Asset Class
+                    {getSortIcon('type')}
+                  </div>
+                </TableHead>
+              )}
+              
+              {visibleColumns.includes('region') && (
+                <TableHead 
+                  className="px-6 font-semibold text-foreground cursor-pointer"
+                  onClick={() => handleSort('region')}
+                >
+                  <div className="flex items-center">
+                    Region
+                    {getSortIcon('region')}
+                  </div>
+                </TableHead>
+              )}
+              
+              {visibleColumns.includes('country') && (
+                <TableHead 
+                  className="px-6 font-semibold text-foreground cursor-pointer"
+                  onClick={() => handleSort('country')}
+                >
+                  <div className="flex items-center">
+                    Country
+                    {getSortIcon('country')}
+                  </div>
+                </TableHead>
+              )}
+              
+              {visibleColumns.includes('currency') && (
+                <TableHead 
+                  className="px-6 font-semibold text-foreground cursor-pointer"
+                  onClick={() => handleSort('currency')}
+                >
+                  <div className="flex items-center">
+                    Currency
+                    {getSortIcon('currency')}
+                  </div>
+                </TableHead>
+              )}
+              
+              {visibleColumns.includes('matchScore') && (
+                <TableHead 
+                  className="px-6 font-semibold text-foreground cursor-pointer"
+                  onClick={() => handleSort('matchScore')}
+                >
+                  <div className="flex items-center">
+                    Match Score
+                    {getSortIcon('matchScore')}
+                  </div>
+                </TableHead>
+              )}
+              
+              <TableHead className="px-6 w-[80px] text-right font-semibold text-foreground">
+                Action
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              // Loading state
+              Array.from({ length: 5 }).map((_, i) => (
+                <TableRow key={`loading-${i}`} className="animate-pulse">
+                  {visibleColumns.map((column, idx) => (
+                    <TableCell key={`loading-${i}-${column}`} className="px-6 py-4">
+                      <div className="h-4 w-16 bg-muted rounded"></div>
                     </TableCell>
-                  </TableRow>
-                ))
-              ) : currentData.length === 0 ? (
-                // Empty state
-                <TableRow>
-                  <TableCell colSpan={visibleColumns.length + 1} className="h-24 text-center text-muted-foreground">
-                    No results found.
+                  ))}
+                  <TableCell className="px-6 py-4 text-right">
+                    <div className="h-4 w-8 bg-muted rounded ml-auto"></div>
                   </TableCell>
                 </TableRow>
-              ) : (
-                // Data rows
-                renderRows()
-              )}
-            </TableBody>
-          </Table>
-        </div>
-        
-        {/* Pagination */}
-        {data.length > itemsPerPage && (
-          <div className="flex items-center justify-between px-6 pt-2 pb-4 border-t">
-            <div className="text-sm text-muted-foreground">
-              Page {currentPage} of {totalPages}
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={goToPrevPage}
-                disabled={currentPage === 1}
-                className="h-7 w-7 p-0"
-              >
-                <ChevronLeft className="h-4 w-4" />
-                <span className="sr-only">Previous Page</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={goToNextPage}
-                disabled={currentPage === totalPages}
-                className="h-7 w-7 p-0"
-              >
-                <ChevronRight className="h-4 w-4" />
-                <span className="sr-only">Next Page</span>
-              </Button>
-            </div>
-          </div>
-        )}
+              ))
+            ) : currentData.length === 0 ? (
+              // Empty state
+              <TableRow>
+                <TableCell colSpan={visibleColumns.length + 1} className="h-24 text-center text-muted-foreground">
+                  No results found.
+                </TableCell>
+              </TableRow>
+            ) : (
+              // Data rows
+              renderRows()
+            )}
+          </TableBody>
+        </Table>
       </div>
       
       {/* Stock quote tooltip */}
-      {tooltipSymbol && tooltipPosition && isTooltipVisible && (
+      {tooltipSymbol && tooltipPosition.top && tooltipPosition.left && isTooltipVisible && (
         <StockQuoteTooltip
           symbol={tooltipSymbol}
           isVisible={true}
           className="shadow-xl border border-border/50 max-w-xs fixed"
           style={{
             position: 'fixed',
-            top: `${tooltipPosition.y}px`,
-            left: `${tooltipPosition.x}px`,
+            top: tooltipPosition.top,
+            left: tooltipPosition.left,
+            transform: tooltipPosition.isAbove ? 'translateY(-100%)' : 'none',
             zIndex: 1000,
-            transform: 'translateX(0)', // Center without translation
           }}
+          isAbove={tooltipPosition.isAbove}
         />
+      )}
+      
+      {/* Pagination */}
+      {data.length > itemsPerPage && (
+        <div className="flex items-center justify-between px-6 pt-2 pb-4 border-t">
+          <div className="text-sm text-muted-foreground">
+            Page {currentPage} of {totalPages}
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
+              className="h-7 w-7 p-0"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="sr-only">Previous Page</span>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+              className="h-7 w-7 p-0"
+            >
+              <ChevronRight className="h-4 w-4" />
+              <span className="sr-only">Next Page</span>
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   )

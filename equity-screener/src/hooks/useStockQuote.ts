@@ -28,9 +28,17 @@ export function useStockQuote(symbol: string): UseStockQuoteResult {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reset data when symbol changes
+  // When the symbol changes, reset the data state
   useEffect(() => {
-    setData(quoteCache[symbol] || null);
+    // Clear the data state when the symbol changes
+    setData(null);
+    setIsLoading(true); 
+    setError(null);
+    
+    // Immediately fetch new data for the symbol
+    if (symbol) {
+      fetchQuote();
+    }
   }, [symbol]);
 
   /**
