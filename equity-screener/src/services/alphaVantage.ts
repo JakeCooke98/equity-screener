@@ -6,6 +6,7 @@
  */
 
 import { mockSymbolSearchResults } from "@/utils/mockData";
+import { generateMockQuoteData } from "@/utils/mockQuoteData";
 import { mockTimeSeriesData } from "@/utils/mockTimeSeriesData";
 
 export interface SymbolSearchMatch {
@@ -33,6 +34,15 @@ export interface TimeSeriesDataPoint {
 export interface TimeSeriesData {
   symbol: string;
   data: TimeSeriesDataPoint[];
+}
+
+export interface StockQuoteData {
+  symbol: string;
+  price: number;
+  changePercent: number;
+  high52Week: number;
+  low52Week: number;
+  lastUpdated: string;
 }
 
 interface SymbolSearchResponse {
@@ -303,4 +313,95 @@ function generateMockTimeSeriesData(symbol: string): TimeSeriesDataPoint[] {
   }
   
   return data;
-} 
+}
+
+/**
+ * Fetches the latest quote data for a given symbol
+ * Includes last price, day change %, and 52-week high/low
+ * 
+ * @param symbol The stock symbol to fetch data for
+ * @returns A promise that resolves to the quote data
+ */
+export async function fetchStockQuote(symbol: string): Promise<StockQuoteData> {
+  try {
+    // Generate mock data in development to avoid hitting API rate limits
+    if (USE_MOCK_DATA) {
+      console.log(`Using mock data for ${symbol} quote (enforced by environment variable or missing API key)`);
+      
+      // Generate realistic mock data based on the symbol
+      const mockQuote = generateMockQuoteData(symbol);
+      
+      // Simulate API delay (shorter than time series to feel more responsive)
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      return mockQuote;
+    }
+    
+    // Try to use the API when we have a key and mock data is not forced
+    if (API_KEY && API_KEY !== 'your_api_key_here') {
+      const url = new URL(API_BASE_URL);
+      url.searchParams.append('function', 'GLOBAL_QUOTE');
+      url.searchParams.append('symbol', symbol);
+      url.searchParams.append('apikey', API_KEY);
+
+      console.log(`Fetching quote data for ${symbol} from Alpha Vantage API`);
+      const response = await fetch(url.toString());
+
+      if (!response.ok) {
+        throw {
+          message: `API request failed with status ${response.status}`,
+          status: response.status
+        };
+      }
+
+      const data = await response.json();
+
+      // Check for API error response
+      if ('Error Message' in data) {
+        throw {
+          message: data['Error Message'] as string
+        };
+      }
+
+      // Check if we have quote data
+      const quote = data['Global Quote'];
+      if (!quote) {
+        throw {
+          message: 'No quote data found'
+        };
+      }
+
+      // For the 52-week high/low, we'll need to make a second call to get the time series data
+      // This is because GLOBAL_QUOTE doesn't provide this info
+      const timeSeriesData = await fetchTimeSeriesData(symbol);
+      
+      // Find the 52-week high and low from the time series data
+      const high52Week = Math.max(...timeSeriesData.data.map(d => d.high));
+      const low52Week = Math.min(...timeSeriesData.data.map(d => d.low));
+
+      return {
+        symbol,
+        price: parseFloat(quote['05. price']),
+        changePercent: parseFloat(quote['10. change percent'].replace('%', '')),
+        high52Week,
+        low52Week,
+        lastUpdated: new Date().toISOString(),
+      };
+    }
+
+    // If we get here, we have no API key and mock data is disabled
+    throw {
+      message: 'API key is required for this operation'
+    };
+  } catch (error) {
+    console.error(`Error fetching quote data for ${symbol}:`, error);
+    
+    // If API fails but we have mock data enabled as fallback, use it
+    if (USE_MOCK_DATA) {
+      console.log(`Falling back to mock data for ${symbol} quote after API failure`);
+      return generateMockQuoteData(symbol);
+    }
+    
+    throw error;
+  }
+}
