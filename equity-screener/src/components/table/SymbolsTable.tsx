@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { StockQuoteTooltip } from './StockQuoteTooltip'
+import { useRouter } from 'next/navigation'
 
 interface SymbolsTableProps {
   data: SymbolSearchMatch[]
@@ -39,6 +40,7 @@ export function SymbolsTable({
   isRowSelected,
   className
 }: SymbolsTableProps) {
+  const router = useRouter()
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null)
   const [sorting, setSorting] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null)
@@ -150,8 +152,11 @@ export function SymbolsTable({
     }
   }
 
-  // Row selection handler
-  const handleRowClick = (symbol: SymbolSearchMatch, index: number) => {
+  // Row selection handler (for dashboard chart selection)
+  const handleToggleSelection = (symbol: SymbolSearchMatch, index: number, event: React.MouseEvent) => {
+    // Make sure the event doesn't propagate to the row click handler
+    event.stopPropagation()
+    
     // Update the local selected row state
     setSelectedRowIndex(isRowSelected && isRowSelected(symbol) ? null : index)
     
@@ -159,6 +164,12 @@ export function SymbolsTable({
     if (onSelectRow) {
       onSelectRow(symbol)
     }
+  }
+  
+  // Handle row click to navigate to stock detail page
+  const handleRowClick = (symbol: SymbolSearchMatch) => {
+    // Navigate to stock detail page using the symbol
+    router.push(`/stock/${symbol.symbol}`)
   }
   
   // Sort handler
@@ -262,6 +273,7 @@ export function SymbolsTable({
         isRowSelected 
           ? isRowSelected(symbol) 
           : selectedRowIndex === index
+      
           
       return (
         <TableRow 
@@ -269,7 +281,7 @@ export function SymbolsTable({
             `${symbol.symbol}-${symbol.region}` : 
             `result-${index}`}
           className={`cursor-pointer hover:bg-muted/50 ${isSelected ? 'bg-primary/5' : ''}`}
-          onClick={() => handleRowClick(symbol, index)}
+          onClick={() => handleRowClick(symbol)}
           onMouseEnter={(e) => handleRowMouseEnter(e, symbol.symbol)}
           onMouseLeave={handleRowMouseLeave}
           onTouchStart={(e) => {
@@ -349,10 +361,7 @@ export function SymbolsTable({
               size="sm" 
               variant={isSelected ? "default" : "ghost"}
               className="h-7 w-7 p-0" 
-              onClick={(e) => {
-                e.stopPropagation()
-                handleRowClick(symbol, index)
-              }}
+              onClick={(e) => handleToggleSelection(symbol, index, e)}
               title={isSelected ? `Remove ${symbol.symbol}` : `Add ${symbol.symbol}`}
             >
               {isSelected ? (
