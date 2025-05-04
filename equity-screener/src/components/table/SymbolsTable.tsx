@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { 
   Table, 
   TableBody, 
@@ -22,6 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useMediaQuery } from '@/hooks/useMediaQuery'
+import { StockQuoteTooltip } from './StockQuoteTooltip'
 
 interface SymbolsTableProps {
   data: SymbolSearchMatch[]
@@ -41,6 +42,36 @@ export function SymbolsTable({
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null)
   const [sorting, setSorting] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null)
+  
+  // State for tooltip
+  const [tooltipSymbol, setTooltipSymbol] = useState<string | null>(null)
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null)
+  const [isTooltipVisible, setIsTooltipVisible] = useState(false)
+  
+  // Use a timeout ref to delay showing/hiding tooltip
+  const tooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // When component mounts, add scroll listener to hide tooltip on scroll
+  // When component unmounts, clear any pending timeouts and remove scroll listener
+  useEffect(() => {
+    // Function to hide tooltip on scroll
+    const handleScroll = () => {
+      if (isTooltipVisible) {
+        setIsTooltipVisible(false)
+      }
+    }
+    
+    // Add event listener
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    
+    // Clean up function
+    return () => {
+      if (tooltipTimeoutRef.current) {
+        clearTimeout(tooltipTimeoutRef.current)
+      }
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [isTooltipVisible])
   
   // Use media query to determine if we're on a small screen
   const isSmallScreen = useMediaQuery('(max-width: 1023px)')
@@ -154,6 +185,72 @@ export function SymbolsTable({
       : <ChevronDown className="h-4 w-4 ml-1" />
   }
 
+  // Handle row hover to show tooltip
+  const handleRowMouseEnter = (symbol: string, event: React.MouseEvent) => {
+    // Clear any existing timeout
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current)
+    }
+
+    // Get position information immediately when the event occurs
+    const row = event.currentTarget as HTMLElement
+    if (!row) {
+      return; // Exit if no element found
+    }
+
+    try {
+      const rect = row.getBoundingClientRect()
+      
+      // Position tooltip below the row - consistent approach for both desktop and mobile
+      // Calculate row center for horizontal positioning
+      const rowCenterX = rect.left + (rect.width / 2)
+      
+      // Calculate viewport center to ensure tooltip is centered when possible
+      const viewportWidth = window.innerWidth
+      const tooltipWidth = 264 // w-64 = 16rem = 256px + 8px for border
+      
+      // Calculate optimal X position - try to center on row but keep within viewport
+      const tooltipX = Math.max(
+        20, // Minimum left margin
+        Math.min(
+          rowCenterX - (tooltipWidth / 2), // Center on row
+          viewportWidth - tooltipWidth - 20 // Maximum right position (with margin)
+        )
+      )
+      
+      // Position tooltip below the row with some margin
+      const tooltipY = rect.bottom + 8 // 8px margin below row
+      
+      // Hide any existing tooltip immediately
+      setIsTooltipVisible(false)
+      
+      // Set tooltip data and position
+      setTooltipSymbol(symbol)
+      setTooltipPosition({ x: tooltipX, y: tooltipY })
+      
+      // Show tooltip after a short delay
+      setTimeout(() => {
+        setIsTooltipVisible(true)
+      }, 80)
+    } catch (error) {
+      console.error('Error calculating tooltip position:', error)
+    }
+  }
+
+  // Handle row hover end to hide tooltip
+  const handleRowMouseLeave = () => {
+    // Clear any existing timeout
+    if (tooltipTimeoutRef.current) {
+      clearTimeout(tooltipTimeoutRef.current)
+    }
+
+    // Set a small delay before hiding tooltip 
+    // This allows moving between adjacent rows without flickering
+    tooltipTimeoutRef.current = setTimeout(() => {
+      setIsTooltipVisible(false)
+    }, 150) // Shorter delay for hiding
+  }
+
   // Render the rows with selected state if available
   const renderRows = () => {
     return currentData.map((symbol, index) => {
@@ -170,6 +267,14 @@ export function SymbolsTable({
             `result-${index}`}
           className={`cursor-pointer hover:bg-muted/50 ${isSelected ? 'bg-primary/5' : ''}`}
           onClick={() => handleRowClick(symbol, index)}
+          onMouseEnter={(e) => handleRowMouseEnter(symbol.symbol, e)}
+          onMouseLeave={handleRowMouseLeave}
+          onTouchStart={(e) => {
+            // For touch devices, show tooltip on touch
+            handleRowMouseEnter(symbol.symbol, e as unknown as React.MouseEvent)
+          }}
+          onTouchEnd={handleRowMouseLeave}
+          onTouchCancel={handleRowMouseLeave}
         >
           {visibleColumns.includes('symbol') && (
             <TableCell className="px-6 py-4 font-medium text-primary">
@@ -254,7 +359,7 @@ export function SymbolsTable({
   }
 
   return (
-    <div className={cn(className)}>
+    <div className={cn("w-full space-y-4 relative", className)}>
       <div className="rounded-md border shadow-sm">
         {isSmallScreen && (
           <div className="p-2 border-b bg-muted/30">
@@ -450,6 +555,22 @@ export function SymbolsTable({
           </div>
         )}
       </div>
+      
+      {/* Stock quote tooltip */}
+      {tooltipSymbol && tooltipPosition && isTooltipVisible && (
+        <StockQuoteTooltip
+          symbol={tooltipSymbol}
+          isVisible={true}
+          className="shadow-xl border border-border/50 max-w-xs fixed"
+          style={{
+            position: 'fixed',
+            top: `${tooltipPosition.y}px`,
+            left: `${tooltipPosition.x}px`,
+            zIndex: 1000,
+            transform: 'translateX(0)', // Center without translation
+          }}
+        />
+      )}
     </div>
   )
 } 
