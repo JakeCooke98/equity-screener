@@ -32,7 +32,7 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-3 mb-6">
           <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-muted-foreground text-lg max-w-3xl">
-            Compare and analyze selected securities. Add 3-5 symbols to visualize data.
+            Compare and analyze selected securities. Add up to 5 symbols to visualize data.
           </p>
         </div>
         

@@ -198,7 +198,7 @@ export function DashboardContent() {
           </CardHeader>
           <CardContent className="px-6 pb-6">
             {isLoading ? (
-              <div className="flex justify-center items-center h-80">
+              <div className="flex justify-center items-center h-92">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : error ? (
@@ -207,7 +207,7 @@ export function DashboardContent() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             ) : chartData.length === 0 ? (
-              <div className="flex justify-center items-center h-80 text-muted-foreground">
+              <div className="flex justify-center items-center h-92 text-muted-foreground">
                 No data available for the selected symbols
               </div>
             ) : (
@@ -215,7 +215,7 @@ export function DashboardContent() {
                 data={chartData} 
                 type={chartType} 
                 symbols={selectedSymbols}
-                className="h-80"
+                className="h-92"
               />
             )}
           </CardContent>
