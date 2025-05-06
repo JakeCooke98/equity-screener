@@ -31,12 +31,15 @@ export function useStockQuote(symbol: string): UseStockQuoteResult {
   // When the symbol changes, reset the data state
   useEffect(() => {
     // Clear the data state when the symbol changes
-    setData(null);
-    setIsLoading(true); 
+    setData(quoteCache[symbol] || null);
+    
+    // Only show loading state if we don't have cached data
+    setIsLoading(!quoteCache[symbol]);
+    
     setError(null);
     
-    // Immediately fetch new data for the symbol
-    if (symbol) {
+    // Immediately fetch new data for the symbol if not in cache
+    if (symbol && !quoteCache[symbol]) {
       fetchQuote();
     }
   }, [symbol]);
@@ -46,6 +49,11 @@ export function useStockQuote(symbol: string): UseStockQuoteResult {
    * Uses cached data if available and not expired
    */
   const fetchQuote = useCallback(async () => {
+    // Skip empty symbols
+    if (!symbol) {
+      return;
+    }
+    
     // If we already have data in the cache, check if it's still fresh (< 5 minutes old)
     if (quoteCache[symbol]) {
       const cachedData = quoteCache[symbol];
@@ -56,6 +64,7 @@ export function useStockQuote(symbol: string): UseStockQuoteResult {
       // If data is less than 5 minutes old, use the cached version
       if (now - lastUpdated < fiveMinutesInMs) {
         setData(cachedData);
+        setIsLoading(false);
         return;
       }
     }
@@ -67,12 +76,31 @@ export function useStockQuote(symbol: string): UseStockQuoteResult {
     try {
       const quoteData = await fetchStockQuote(symbol);
       
+      // Safety check - ensure we got valid data back
+      if (!quoteData || !quoteData.symbol) {
+        console.warn(`Received invalid quote data for ${symbol}`);
+        throw new Error('Invalid quote data received');
+      }
+      
       // Update cache and state
       quoteCache[symbol] = quoteData;
       setData(quoteData);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch quote data';
-      setError(errorMessage);
+      // Instead of showing the error, just log it and use mock data
+      console.error(`Error fetching quote for ${symbol}:`, err);
+      
+      // If we have cached data, continue using it even if it's stale
+      if (quoteCache[symbol]) {
+        console.log(`Using stale cached data for ${symbol}`);
+        setData(quoteCache[symbol]);
+      } else {
+        // If no error message is available, use a generic one
+        const errorMessage = err instanceof Error ? 
+          err.message : 
+          'Failed to fetch quote data';
+        
+        setError(errorMessage);
+      }
     } finally {
       setIsLoading(false);
     }
