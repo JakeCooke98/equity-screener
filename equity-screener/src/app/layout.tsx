@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SymbolsProvider } from "@/contexts/SymbolsContext";
+import { ThemeProvider } from "@/contexts/ThemeContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,11 +25,24 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Prevent theme flash on page load */}
+        <script dangerouslySetInnerHTML={{ __html: `
+          (function() {
+            try {
+              const theme = localStorage.getItem('theme') || 'light';
+              document.documentElement.classList.toggle('dark', theme === 'dark');
+            } catch (e) {}
+          })()
+        `}} />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <SymbolsProvider>
-          {children}
-        </SymbolsProvider>
+        <ThemeProvider>
+          <SymbolsProvider>
+            {children}
+          </SymbolsProvider>
+        </ThemeProvider>
       </body>
     </html>
   );
