@@ -99,46 +99,6 @@ function NewsSkeleton() {
   );
 }
 
-// Utility to handle loading, error and content states
-function ContentState<T>({ 
-  isLoading, 
-  error, 
-  data, 
-  LoadingComponent, 
-  ErrorComponent, 
-  EmptyComponent, 
-  children 
-}: { 
-  isLoading: boolean; 
-  error: string | null; 
-  data: T | null; 
-  LoadingComponent: React.ReactNode; 
-  ErrorComponent?: (error: string) => React.ReactNode; 
-  EmptyComponent?: React.ReactNode; 
-  children: (data: T) => React.ReactNode;
-}) {
-  if (isLoading) {
-    return LoadingComponent;
-  }
-  
-  if (error) {
-    return ErrorComponent ? ErrorComponent(error) : (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
-    );
-  }
-  
-  if (!data) {
-    return EmptyComponent || (
-      <div className="text-muted-foreground">No data available</div>
-    );
-  }
-  
-  return children(data);
-}
-
 // Create a simple error boundary component
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode; fallback: React.ReactNode },
@@ -394,37 +354,36 @@ export default function StockDetailPage() {
                 </div>
               </CardHeader>
               <CardContent className="px-6 pb-6">
-                <ContentState
-                  isLoading={isLoading.priceData}
-                  error={errors.priceData}
-                  data={timeSeriesData}
-                  LoadingComponent={<ChartSkeleton />}
-                  EmptyComponent={
-                    <div className="flex justify-center items-center h-80 text-muted-foreground">
-                      No price data available
-                    </div>
-                  }
-                >
-                  {(data) => (
-                    <div className="h-80">
-                      <ErrorBoundary 
-                        fallback={
-                          <Alert variant="destructive" className="h-80 flex items-center justify-center">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertDescription>Failed to load price chart</AlertDescription>
-                          </Alert>
-                        }
-                      >
-                        <Suspense fallback={<ChartSkeleton />}>
-                          <StockPriceChart 
-                            data={getPriceChartData()}
-                            symbol={symbol}
-                          />
-                        </Suspense>
-                      </ErrorBoundary>
-                    </div>
-                  )}
-                </ContentState>
+                {isLoading.priceData ? (
+                  <ChartSkeleton />
+                ) : errors.priceData ? (
+                  <Alert variant="destructive" className="h-80 flex items-center justify-center">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{errors.priceData}</AlertDescription>
+                  </Alert>
+                ) : !timeSeriesData ? (
+                  <div className="flex justify-center items-center h-80 text-muted-foreground">
+                    No price data available
+                  </div>
+                ) : (
+                  <div className="h-80">
+                    <ErrorBoundary
+                      fallback={
+                        <Alert variant="destructive" className="h-80 flex items-center justify-center">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>Failed to load price chart</AlertDescription>
+                        </Alert>
+                      }
+                    >
+                      <Suspense fallback={<ChartSkeleton />}>
+                        <StockPriceChart 
+                          data={getPriceChartData()}
+                          symbol={symbol}
+                        />
+                      </Suspense>
+                    </ErrorBoundary>
+                  </div>
+                )}
               </CardContent>
             </Card>
             
@@ -434,32 +393,33 @@ export default function StockDetailPage() {
                 <CardTitle>Company Overview</CardTitle>
               </CardHeader>
               <CardContent className="px-6 pb-6">
-                <ContentState
-                  isLoading={isLoading.overview}
-                  error={errors.overview}
-                  data={overview}
-                  LoadingComponent={<OverviewSkeleton />}
-                  EmptyComponent={<p className="text-muted-foreground">No company data available</p>}
-                >
-                  {(data) => (
-                    <ErrorBoundary
-                      fallback={
-                        <Alert variant="destructive">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>Failed to load company overview</AlertDescription>
-                        </Alert>
-                      }
-                    >
-                      <Suspense fallback={<OverviewSkeleton />}>
-                        <StockOverviewSection 
-                          overview={data} 
-                          formatMarketCap={formatMarketCap}
-                          formatCurrency={formatCurrency}
-                        />
-                      </Suspense>
-                    </ErrorBoundary>
-                  )}
-                </ContentState>
+                {isLoading.overview ? (
+                  <OverviewSkeleton />
+                ) : errors.overview ? (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{errors.overview}</AlertDescription>
+                  </Alert>
+                ) : !overview ? (
+                  <p className="text-muted-foreground">No company data available</p>
+                ) : (
+                  <ErrorBoundary
+                    fallback={
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>Failed to load company overview</AlertDescription>
+                      </Alert>
+                    }
+                  >
+                    <Suspense fallback={<OverviewSkeleton />}>
+                      <StockOverviewSection 
+                        overview={overview} 
+                        formatMarketCap={formatMarketCap}
+                        formatCurrency={formatCurrency}
+                      />
+                    </Suspense>
+                  </ErrorBoundary>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -470,28 +430,29 @@ export default function StockDetailPage() {
               <CardTitle>Recent News</CardTitle>
             </CardHeader>
             <CardContent className="px-6 pb-6">
-              <ContentState
-                isLoading={isLoading.news}
-                error={errors.news}
-                data={news.length > 0 ? news : null}
-                LoadingComponent={<NewsSkeleton />}
-                EmptyComponent={<p className="text-muted-foreground">No news articles available</p>}
-              >
-                {(data) => (
-                  <ErrorBoundary
-                    fallback={
-                      <Alert variant="destructive">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>Failed to load news articles</AlertDescription>
-                      </Alert>
-                    }
-                  >
-                    <Suspense fallback={<NewsSkeleton />}>
-                      <StockNewsSection news={data} formatDate={formatDate} />
-                    </Suspense>
-                  </ErrorBoundary>
-                )}
-              </ContentState>
+              {isLoading.news ? (
+                <NewsSkeleton />
+              ) : errors.news ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{errors.news}</AlertDescription>
+                </Alert>
+              ) : !news.length ? (
+                <p className="text-muted-foreground">No news articles available</p>
+              ) : (
+                <ErrorBoundary
+                  fallback={
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>Failed to load news articles</AlertDescription>
+                    </Alert>
+                  }
+                >
+                  <Suspense fallback={<NewsSkeleton />}>
+                    <StockNewsSection news={news} formatDate={formatDate} />
+                  </Suspense>
+                </ErrorBoundary>
+              )}
             </CardContent>
           </Card>
         </div>
