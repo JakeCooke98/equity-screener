@@ -123,4 +123,47 @@ function generateMockCompanyOverview(symbol: string): CompanyOverview {
     });
   }
 
-export { generateMockCompanyOverview, generateMockCompanyNews };
+/**
+ * Generate mock market news (not specific to any company)
+ */
+function generateMockMarketNews(): NewsArticle[] {
+  // News sources
+  const sources = ['Financial Times', 'Bloomberg', 'The Wall Street Journal', 'CNBC', 'Reuters', 'MarketWatch', 'Barron\'s', 'Investor\'s Business Daily'];
+  
+  // Market news article templates
+  const newsTemplates = [
+    { title: 'Federal Reserve Signals Potential Rate Changes', summary: 'The Federal Reserve indicated it might adjust interest rates in response to recent economic data, according to minutes from the latest meeting.' },
+    { title: 'S&P 500 Reaches New All-Time High', summary: 'The S&P 500 index surged to a record high today, driven by strong performance in technology and healthcare sectors.' },
+    { title: 'Oil Prices Fluctuate Amid Global Supply Concerns', summary: 'Crude oil futures experienced volatility as traders assessed supply disruptions and potential demand changes in key markets.' },
+    { title: 'Treasury Yields Rise on Economic Outlook', summary: 'Government bond yields climbed as investors reassess inflation expectations and economic growth forecasts.' },
+    { title: 'Market Volatility Increases as Earnings Season Begins', summary: 'Stock market volatility metrics have risen as companies start to report quarterly earnings, with mixed results so far.' },
+    { title: 'Tech Sector Leads Market Rally', summary: 'Technology stocks powered a broad market rally, with semiconductor and software companies posting significant gains.' },
+    { title: 'GDP Growth Exceeds Expectations in Q2', summary: 'The economy grew faster than anticipated in the second quarter, according to preliminary data released by the Commerce Department.' },
+    { title: 'Retail Sales Data Shows Consumer Resilience', summary: 'Monthly retail sales figures came in stronger than expected, suggesting consumer spending remains robust despite economic headwinds.' },
+    { title: 'Gold Prices Reach Six-Month High', summary: 'Gold futures climbed to their highest level in six months as investors seek safe-haven assets amid economic uncertainty.' },
+    { title: 'Housing Market Shows Signs of Cooling', summary: 'New home sales and mortgage applications declined last month, potentially signaling a moderation in the housing market.' },
+    { title: 'Dollar Strengthens Against Major Currencies', summary: 'The U.S. dollar index rose against a basket of major currencies, reaching its highest level since January.' },
+    { title: 'Inflation Data Comes in Below Expectations', summary: 'The latest Consumer Price Index report showed inflation easing slightly, providing some relief to markets concerned about persistent price pressures.' },
+    { title: 'Market Analysts Divided on Year-End Outlook', summary: 'Wall Street strategists are showing unusual divergence in their forecasts for how markets will perform through the end of the year.' },
+    { title: 'Small-Cap Stocks Outperform Broader Market', summary: 'Small-capitalization companies have outpaced their larger counterparts over the past month, potentially signaling a shift in market leadership.' },
+    { title: 'Global Markets React to Central Bank Decisions', summary: 'International stock markets showed mixed reactions to policy announcements from major central banks around the world.' }
+  ];
+  
+  // Generate news articles
+  return newsTemplates.map((template, index) => {
+    // Generate a date within the last 15 days
+    const date = new Date();
+    date.setDate(date.getDate() - (index % 15)); // Distribute over the last 15 days
+    
+    return {
+      title: template.title,
+      url: `https://example.com/market-news/${date.getTime()}`,
+      summary: template.summary,
+      source: sources[index % sources.length],
+      publishedAt: date.toISOString(),
+      image: index % 4 === 0 ? `https://picsum.photos/seed/market${index}/800/400` : undefined // Only some articles have images
+    };
+  });
+}
+
+export { generateMockCompanyOverview, generateMockCompanyNews, generateMockMarketNews };

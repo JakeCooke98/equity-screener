@@ -7,7 +7,7 @@
 
 import { mockSymbolSearchResults } from "@/utils/mockData";
 import { generateMockQuoteData } from "@/utils/mockQuoteData";
-import { generateMockCompanyNews, generateMockCompanyOverview } from "@/utils/mockStockData";
+import { generateMockCompanyNews, generateMockCompanyOverview, generateMockMarketNews } from "@/utils/mockStockData";
 import { mockTimeSeriesData } from "@/utils/mockTimeSeriesData";
 
 export interface SymbolSearchMatch {
@@ -578,5 +578,181 @@ export async function fetchCompanyNews(symbol: string): Promise<NewsArticle[]> {
     console.error('Error fetching company news:', error);
     // In case of any error, return mock data as fallback
     return generateMockCompanyNews(symbol);
+  }
+}
+
+/**
+ * Fetches general market news (not specific to any symbol)
+ * 
+ * @returns A promise that resolves to an array of general market news articles
+ */
+export async function fetchMarketNews(): Promise<NewsArticle[]> {
+  try {
+    // Generate mock data in development to avoid hitting API rate limits
+    if (USE_MOCK_DATA) {
+      console.log('Using mock data for market news (enforced by environment variable or missing API key)');
+      
+      // Generate mock market news data
+      const mockNews = generateMockMarketNews();
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 700));
+      
+      return mockNews;
+    }
+    
+    // Try to use the API when we have a key and mock data is not forced
+    if (API_KEY && API_KEY !== 'your_api_key_here') {
+      const url = new URL(API_BASE_URL);
+      url.searchParams.append('function', 'NEWS_SENTIMENT');
+      url.searchParams.append('topics', 'financial_markets,economy_fiscal,economy_monetary');
+      url.searchParams.append('apikey', API_KEY);
+      url.searchParams.append('limit', '15'); // Limit to 15 news articles
+      
+      console.log('Fetching general market news from Alpha Vantage API');
+      const response = await fetch(url.toString());
+      
+      if (!response.ok) {
+        throw {
+          message: `API request failed with status ${response.status}`,
+          status: response.status
+        };
+      }
+      
+      const data = await response.json();
+      
+      // Check for API error response
+      if ('Error Message' in data) {
+        throw {
+          message: data['Error Message'] as string
+        };
+      }
+      
+      // Check if we got feed entries
+      if (!data.feed || !Array.isArray(data.feed)) {
+        throw {
+          message: 'No news data found'
+        };
+      }
+      
+      // Transform the API response to our internal format
+      return data.feed.map((item: any) => ({
+        title: item.title,
+        url: item.url,
+        summary: item.summary,
+        source: item.source,
+        publishedAt: item.time_published,
+        image: item.banner_image || undefined
+      }));
+    }
+    
+    // If we get here, we have no API key and mock data is disabled
+    throw {
+      message: 'API key is required for this operation'
+    };
+  } catch (error) {
+    console.error('Error fetching market news:', error);
+    // In case of any error, return mock data as fallback
+    return generateMockMarketNews();
+  }
+}
+
+/**
+ * Fetches news for multiple symbols combined
+ * 
+ * @param symbols Array of stock symbols to fetch news for
+ * @returns A promise that resolves to an array of news articles related to the provided symbols
+ */
+export async function fetchMultiSymbolNews(symbols: string[]): Promise<NewsArticle[]> {
+  if (!symbols.length) {
+    return fetchMarketNews();
+  }
+  
+  try {
+    // Generate mock data in development to avoid hitting API rate limits
+    if (USE_MOCK_DATA) {
+      console.log(`Using mock data for symbols [${symbols.join(', ')}] news (enforced by environment variable or missing API key)`);
+      
+      // Generate mock news data for each symbol and combine
+      let combinedNews: NewsArticle[] = [];
+      
+      for (const symbol of symbols) {
+        const mockNews = generateMockCompanyNews(symbol);
+        combinedNews = [...combinedNews, ...mockNews];
+      }
+      
+      // Limit to most recent 15 articles
+      combinedNews.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+      combinedNews = combinedNews.slice(0, 15);
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 700));
+      
+      return combinedNews;
+    }
+    
+    // Try to use the API when we have a key and mock data is not forced
+    if (API_KEY && API_KEY !== 'your_api_key_here') {
+      const url = new URL(API_BASE_URL);
+      url.searchParams.append('function', 'NEWS_SENTIMENT');
+      url.searchParams.append('tickers', symbols.join(','));
+      url.searchParams.append('apikey', API_KEY);
+      url.searchParams.append('limit', '15'); // Limit to 15 news articles
+      
+      console.log(`Fetching news for symbols [${symbols.join(', ')}] from Alpha Vantage API`);
+      const response = await fetch(url.toString());
+      
+      if (!response.ok) {
+        throw {
+          message: `API request failed with status ${response.status}`,
+          status: response.status
+        };
+      }
+      
+      const data = await response.json();
+      
+      // Check for API error response
+      if ('Error Message' in data) {
+        throw {
+          message: data['Error Message'] as string
+        };
+      }
+      
+      // Check if we got feed entries
+      if (!data.feed || !Array.isArray(data.feed)) {
+        throw {
+          message: 'No news data found'
+        };
+      }
+      
+      // Transform the API response to our internal format
+      return data.feed.map((item: any) => ({
+        title: item.title,
+        url: item.url,
+        summary: item.summary,
+        source: item.source,
+        publishedAt: item.time_published,
+        image: item.banner_image || undefined
+      }));
+    }
+    
+    // If we get here, we have no API key and mock data is disabled
+    throw {
+      message: 'API key is required for this operation'
+    };
+  } catch (error) {
+    console.error('Error fetching multi-symbol news:', error);
+    
+    // In case of any error, return combined mock data as fallback
+    let combinedNews: NewsArticle[] = [];
+      
+    for (const symbol of symbols) {
+      const mockNews = generateMockCompanyNews(symbol);
+      combinedNews = [...combinedNews, ...mockNews];
+    }
+    
+    // Limit to most recent 15 articles
+    combinedNews.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
+    return combinedNews.slice(0, 15);
   }
 }
