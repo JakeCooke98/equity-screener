@@ -21,7 +21,7 @@ interface CustomTooltipProps {
   label?: string
 }
 
-export function StockPriceChart({ data, symbol }: StockPriceChartProps) {
+export default function StockPriceChart({ data, symbol }: StockPriceChartProps) {
   // Format date for display
   const formatDate = useCallback((dateStr: string) => {
     const date = new Date(dateStr)

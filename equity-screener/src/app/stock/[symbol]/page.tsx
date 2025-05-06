@@ -2,17 +2,136 @@
 
 import { useParams, useRouter } from 'next/navigation'
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, ExternalLink, BarChart2, Loader2, AlertCircle } from "lucide-react"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ArrowLeft, BarChart2, AlertCircle } from "lucide-react"
 import { fetchCompanyOverview, fetchCompanyNews, fetchTimeSeriesData, CompanyOverview, NewsArticle, TimeSeriesData, SymbolSearchMatch } from "@/services/alphaVantage"
 import { formatCurrency, formatLargeNumber, formatDate } from "@/lib/formatters"
-import { cn } from "@/lib/utils"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useSymbols } from "@/contexts/SymbolsContext"
-import { StockPriceChart } from "@/components/stock/StockPriceChart"
+
+// Lazy load components with Next.js dynamic imports
+const StockPriceChart = dynamic(
+  () => import('@/components/stock/StockPriceChart'),
+  { 
+    loading: () => <ChartSkeleton />,
+    ssr: false
+  }
+);
+
+const StockOverviewSection = dynamic(
+  () => import('@/components/stock/StockOverviewSection'),
+  { 
+    loading: () => <OverviewSkeleton />,
+    ssr: false
+  }
+);
+
+const StockNewsSection = dynamic(
+  () => import('@/components/stock/StockNewsSection'),
+  { 
+    loading: () => <NewsSkeleton />,
+    ssr: false
+  }
+);
+
+// Skeleton loaders
+function HeaderSkeleton() {
+  return (
+    <div className="animate-pulse flex items-center">
+      <div className="h-8 bg-muted rounded w-40"></div>
+    </div>
+  );
+}
+
+function ChartSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4">
+      <div className="flex justify-between items-center">
+        <div className="h-6 bg-muted rounded w-1/4"></div>
+        <div className="h-8 bg-muted rounded w-1/5"></div>
+      </div>
+      <div className="h-[300px] bg-muted rounded w-full"></div>
+    </div>
+  );
+}
+
+function OverviewSkeleton() {
+  return (
+    <div className="animate-pulse space-y-4">
+      <div className="h-6 bg-muted rounded w-1/3"></div>
+      <div className="h-4 bg-muted rounded w-full"></div>
+      <div className="h-4 bg-muted rounded w-full"></div>
+      <div className="h-4 bg-muted rounded w-3/4"></div>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-2">
+        {[...Array(9)].map((_, i) => (
+          <div key={i}>
+            <div className="h-3 bg-muted rounded w-1/2 mb-2"></div>
+            <div className="h-4 bg-muted rounded w-2/3"></div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NewsSkeleton() {
+  return (
+    <div className="animate-pulse space-y-6">
+      {[...Array(3)].map((_, i) => (
+        <div key={i} className="space-y-2">
+          <div className="h-4 bg-muted rounded w-3/4"></div>
+          <div className="h-3 bg-muted rounded w-1/4 opacity-70"></div>
+          <div className="h-3 bg-muted rounded"></div>
+          <div className="h-3 bg-muted rounded w-5/6"></div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Utility to handle loading, error and content states
+function ContentState<T>({ 
+  isLoading, 
+  error, 
+  data, 
+  LoadingComponent, 
+  ErrorComponent, 
+  EmptyComponent, 
+  children 
+}: { 
+  isLoading: boolean; 
+  error: string | null; 
+  data: T | null; 
+  LoadingComponent: React.ReactNode; 
+  ErrorComponent?: (error: string) => React.ReactNode; 
+  EmptyComponent?: React.ReactNode; 
+  children: (data: T) => React.ReactNode;
+}) {
+  if (isLoading) {
+    return LoadingComponent;
+  }
+  
+  if (error) {
+    return ErrorComponent ? ErrorComponent(error) : (
+      <Alert variant="destructive">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>{error}</AlertDescription>
+      </Alert>
+    );
+  }
+  
+  if (!data) {
+    return EmptyComponent || (
+      <div className="text-muted-foreground">No data available</div>
+    );
+  }
+  
+  return children(data);
+}
 
 export default function StockDetailPage() {
   const router = useRouter()
@@ -197,10 +316,7 @@ export default function StockDetailPage() {
           <div>
             <h3 className="text-2xl font-bold tracking-tight flex items-center gap-2">
               {isLoading.overview ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                  <span>Loading...</span>
-                </div>
+                <HeaderSkeleton />
               ) : (
                 <>
                   {overview?.Name || symbol}
@@ -210,7 +326,7 @@ export default function StockDetailPage() {
                 </>
               )}
             </h3>
-            {overview && (
+            {!isLoading.overview && overview && (
               <p className="text-muted-foreground mt-1">
                 {overview.Exchange} · {overview.Currency} · {overview.Country}
               </p>
@@ -249,27 +365,26 @@ export default function StockDetailPage() {
                 </div>
               </CardHeader>
               <CardContent className="px-6 pb-6">
-                {isLoading.priceData ? (
-                  <div className="flex justify-center items-center h-80">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  </div>
-                ) : errors.priceData ? (
-                  <Alert variant="destructive" className="h-80 flex items-center justify-center">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{errors.priceData}</AlertDescription>
-                  </Alert>
-                ) : timeSeriesData ? (
-                  <div className="h-80">
-                    <StockPriceChart 
-                      data={getPriceChartData()}
-                      symbol={symbol}
-                    />
-                  </div>
-                ) : (
-                  <div className="flex justify-center items-center h-80 text-muted-foreground">
-                    No price data available
-                  </div>
-                )}
+                <ContentState
+                  isLoading={isLoading.priceData}
+                  error={errors.priceData}
+                  data={timeSeriesData}
+                  LoadingComponent={<ChartSkeleton />}
+                  EmptyComponent={
+                    <div className="flex justify-center items-center h-80 text-muted-foreground">
+                      No price data available
+                    </div>
+                  }
+                >
+                  {(data) => (
+                    <div className="h-80">
+                      <StockPriceChart 
+                        data={getPriceChartData()}
+                        symbol={symbol}
+                      />
+                    </div>
+                  )}
+                </ContentState>
               </CardContent>
             </Card>
             
@@ -279,66 +394,21 @@ export default function StockDetailPage() {
                 <CardTitle>Company Overview</CardTitle>
               </CardHeader>
               <CardContent className="px-6 pb-6">
-                {isLoading.overview ? (
-                  <div className="animate-pulse space-y-4">
-                    <div className="h-4 bg-muted rounded w-3/4"></div>
-                    <div className="h-4 bg-muted rounded"></div>
-                    <div className="h-4 bg-muted rounded"></div>
-                    <div className="h-4 bg-muted rounded w-4/5"></div>
-                  </div>
-                ) : errors.overview ? (
-                  <Alert variant="destructive">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>{errors.overview}</AlertDescription>
-                  </Alert>
-                ) : overview ? (
-                  <div className="space-y-6">
-                    <p className="leading-7">{overview.Description}</p>
-                    
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">Sector</h4>
-                        <p>{overview.Sector}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">Industry</h4>
-                        <p>{overview.Industry}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">Market Cap</h4>
-                        <p>{formatMarketCap(overview.MarketCapitalization)}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">P/E Ratio</h4>
-                        <p>{overview.PERatio !== "None" ? overview.PERatio : "N/A"}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">EPS</h4>
-                        <p>{overview.EPS !== "None" ? overview.EPS : "N/A"}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">Dividend Yield</h4>
-                        <p>{overview.DividendYield !== "None" ? 
-                          `${(parseFloat(overview.DividendYield) * 100).toFixed(2)}%` : 
-                          "N/A"}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">Beta</h4>
-                        <p>{overview.Beta !== "None" ? overview.Beta : "N/A"}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">52W High</h4>
-                        <p>{formatCurrency(parseFloat(overview.FiftyTwoWeekHigh))}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium text-muted-foreground">52W Low</h4>
-                        <p>{formatCurrency(parseFloat(overview.FiftyTwoWeekLow))}</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-muted-foreground">No company data available</p>
-                )}
+                <ContentState
+                  isLoading={isLoading.overview}
+                  error={errors.overview}
+                  data={overview}
+                  LoadingComponent={<OverviewSkeleton />}
+                  EmptyComponent={<p className="text-muted-foreground">No company data available</p>}
+                >
+                  {(data) => (
+                    <StockOverviewSection 
+                      overview={data} 
+                      formatMarketCap={formatMarketCap}
+                      formatCurrency={formatCurrency}
+                    />
+                  )}
+                </ContentState>
               </CardContent>
             </Card>
           </div>
@@ -349,45 +419,17 @@ export default function StockDetailPage() {
               <CardTitle>Recent News</CardTitle>
             </CardHeader>
             <CardContent className="px-6 pb-6">
-              {isLoading.news ? (
-                <div className="space-y-6">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="animate-pulse space-y-2">
-                      <div className="h-4 bg-muted rounded w-3/4"></div>
-                      <div className="h-3 bg-muted rounded w-1/4 opacity-70"></div>
-                      <div className="h-3 bg-muted rounded"></div>
-                      <div className="h-3 bg-muted rounded w-5/6"></div>
-                    </div>
-                  ))}
-                </div>
-              ) : errors.news ? (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{errors.news}</AlertDescription>
-                </Alert>
-              ) : news.length > 0 ? (
-                <div className="space-y-6">
-                  {news.map((article, i) => (
-                    <div key={i} className="space-y-2">
-                      <a 
-                        href={article.url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="font-medium hover:underline flex items-start gap-1"
-                      >
-                        {article.title}
-                        <ExternalLink className="h-3 w-3 flex-shrink-0 mt-1" />
-                      </a>
-                      <div className="text-sm text-muted-foreground">
-                        {article.source} · {formatDate(new Date(article.publishedAt))}
-                      </div>
-                      <p className="text-sm">{article.summary}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground">No news articles available</p>
-              )}
+              <ContentState
+                isLoading={isLoading.news}
+                error={errors.news}
+                data={news.length > 0 ? news : null}
+                LoadingComponent={<NewsSkeleton />}
+                EmptyComponent={<p className="text-muted-foreground">No news articles available</p>}
+              >
+                {(data) => (
+                  <StockNewsSection news={data} formatDate={formatDate} />
+                )}
+              </ContentState>
             </CardContent>
           </Card>
         </div>
