@@ -18,8 +18,8 @@ export function SearchContainer() {
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
   const prevResultsLengthRef = useRef<number>(0)
   
-  // Track selected rows in the table for news filtering
-  const [selectedRows, setSelectedRows] = useState<string[]>([])
+  // Get just the symbol strings from the selectedSymbols objects for the news panel
+  const selectedSymbolStrings = selectedSymbols.map(symbol => symbol.symbol)
 
   // Handle selecting a symbol from the results table
   const handleSelectSymbol = (symbol: SymbolSearchMatch) => {
@@ -35,21 +35,8 @@ export function SearchContainer() {
     
     // Toggle the symbol without showing messages for success/removal
     toggleSymbol(symbol)
-    
-    // Update selected rows for news filtering
-    updateSelectedRows(symbol)
   }
   
-  // Update the selectedRows array when a row is selected
-  const updateSelectedRows = (symbol: SymbolSearchMatch) => {
-    if (selectedRows.includes(symbol.symbol)) {
-      setSelectedRows(prevSelected => prevSelected.filter(s => s !== symbol.symbol))
-    } else {
-      // Keep only the most recent 3 selections for better news relevance
-      setSelectedRows(prevSelected => [...prevSelected, symbol.symbol].slice(-3))
-    }
-  }
-
   // Handle search results from the SymbolSearch component
   const handleSearchResults = (results: SymbolSearchMatch[], isLoading: boolean) => {
     // Update search results
@@ -121,7 +108,7 @@ export function SearchContainer() {
       </Card>
       
       {/* Market News Panel */}
-      <MarketNewsPanel selectedSymbols={selectedRows.length > 0 ? selectedRows : undefined} />
+      <MarketNewsPanel selectedSymbols={selectedSymbolStrings.length > 0 ? selectedSymbolStrings : undefined} />
       
       {/* Toast-like error messages in the bottom-right corner */}
       {errorMessage && (
