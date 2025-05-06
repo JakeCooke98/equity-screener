@@ -8,12 +8,19 @@ export default function Home() {
     <div className="flex min-h-screen flex-col">
       <header className="flex h-16 items-center justify-between border-b px-6 md:px-10">
         <h1 className="text-xl font-bold">Equity Screener</h1>
-        <Button variant="outline" size="sm" asChild className="gap-1">
-          <Link href="/dashboard">
-            <BarChart2 className="h-4 w-4" />
-            Dashboard
-          </Link>
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" asChild className="gap-1">
+            <Link href="/lazy-loading-demo">
+              Lazy Loading Demo
+            </Link>
+          </Button>
+          <Button variant="outline" size="sm" asChild className="gap-1">
+            <Link href="/dashboard">
+              <BarChart2 className="h-4 w-4" />
+              Dashboard
+            </Link>
+          </Button>
+        </div>
       </header>
       
       <main className="flex-1 py-8 px-6 md:px-10 max-w-7xl mx-auto w-full">
