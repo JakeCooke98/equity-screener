@@ -7,11 +7,38 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Loader2, AlertCircle, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { NewsArticle } from '@/services/alphaVantage'
-import { fetchMarketNews, fetchMultiSymbolNews } from '@/services/alphaVantage'
+import { 
+  fetchMarketNews, 
+  fetchMultiSymbolNews 
+} from '@/services/alphaVantage'
+import { 
+  generateMockMarketNews, 
+  generateMockCompanyNews 
+} from '@/utils/mockStockData'
 import { cn } from '@/lib/utils'
+
+// Cache for news data to prevent redundant API calls
+const marketNewsCache: {
+  data: NewsArticle[] | null;
+  timestamp: number;
+} = {
+  data: null,
+  timestamp: 0
+};
+
+const symbolNewsCache = new Map<string, {
+  data: NewsArticle[];
+  timestamp: number;
+}>();
+
+// Cache expiration time (10 minutes)
+const CACHE_EXPIRY_MS = 10 * 60 * 1000;
 
 /**
  * Formats a date string relative to current time (e.g., "2 hours ago")
+ * 
+ * @param dateString ISO date string to format
+ * @returns Formatted relative time string
  */
 function formatRelativeTime(dateString: string): string {
   try {
@@ -48,87 +75,198 @@ interface MarketNewsPanelProps {
 /**
  * Market News Panel Component
  * 
- * Displays financial news either for selected symbols or general market news
- * if no symbols are selected.
+ * Displays financial news either for selected symbols or general market news.
+ * If no data is available from the API, shows a clean empty state.
  */
 export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsPanelProps) {
   // State
   const [news, setNews] = useState<NewsArticle[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isExpanded, setIsExpanded] = useState(true)
-  const [activeTab, setActiveTab] = useState<'all' | 'market'>('all')
-  const [isFirstLoad, setIsFirstLoad] = useState(true)
+  const [activeTab, setActiveTab] = useState<'all' | 'market'>(selectedSymbols.length > 0 ? 'all' : 'market')
   
-  // Refs to track current state values without triggering dependency changes
-  const selectedSymbolsRef = useRef<string[]>(selectedSymbols)
-  const activeTabRef = useRef<'all' | 'market'>(activeTab)
-  const isFirstMount = useRef(true)
+  // Track if we've already loaded news to prevent unnecessary fetches
+  const hasLoadedNews = useRef(false)
+  const symbolKey = selectedSymbols.sort().join(',')
+  const prevSymbolKey = useRef(symbolKey)
+  const prevActiveTab = useRef(activeTab)
   
-  // Update refs when props/state change
+  // Update active tab when symbols change
   useEffect(() => {
-    selectedSymbolsRef.current = selectedSymbols;
-  }, [selectedSymbols]);
-  
-  useEffect(() => {
-    activeTabRef.current = activeTab;
-  }, [activeTab]);
+    // If symbols were added and we're on market tab, switch to symbols tab
+    if (selectedSymbols.length > 0 && activeTab === 'market' && prevSymbolKey.current === '') {
+      setActiveTab('all');
+    }
+    // If all symbols were removed and we're on symbols tab, switch to market tab
+    else if (selectedSymbols.length === 0 && activeTab === 'all') {
+      setActiveTab('market');
+    }
+    
+    // Update the previous symbol key reference
+    prevSymbolKey.current = symbolKey;
+  }, [selectedSymbols, activeTab, symbolKey]);
   
   // Fetch news data based on selected symbols
   const fetchNews = useCallback(async () => {
-    // Only show loading state if this is the first load or switching tabs
-    if (isFirstLoad) {
-      setIsLoading(true);
+    let shouldFetch = false;
+    const now = Date.now();
+    
+    if (activeTab === 'market' || selectedSymbols.length === 0) {
+      // Market news case
+      if (!marketNewsCache.data || (now - marketNewsCache.timestamp > CACHE_EXPIRY_MS)) {
+        shouldFetch = true;
+      }
+    } else {
+      // Symbol news case
+      const cachedData = symbolNewsCache.get(symbolKey);
+      if (!cachedData || (now - cachedData.timestamp > CACHE_EXPIRY_MS)) {
+        shouldFetch = true;
+      }
     }
     
-    setError(null)
+    // Only fetch if needed
+    if (!shouldFetch && !isLoading) {
+      if (activeTab === 'market' || selectedSymbols.length === 0) {
+        if (marketNewsCache.data) {
+          console.log("Using cached market news");
+          setNews(marketNewsCache.data);
+          return;
+        }
+      } else {
+        const cachedData = symbolNewsCache.get(symbolKey);
+        if (cachedData) {
+          console.log(`Using cached news for symbols: ${symbolKey}`);
+          setNews(cachedData.data);
+          return;
+        }
+      }
+    }
+    
+    setIsLoading(true);
+    setError(null);
     
     try {
-      // Use ref values to avoid dependency on state variables
-      const currentTab = activeTabRef.current
-      const currentSymbols = selectedSymbolsRef.current
+      let data: NewsArticle[];
       
-      console.log(`Fetching news: tab=${currentTab}, symbols=${currentSymbols.join(',') || 'none'}`);
-      
-      // If "market" tab is active or no symbols are selected, get market news
-      if (currentTab === 'market' || currentSymbols.length === 0) {
-        const data = await fetchMarketNews()
-        setNews(data)
+      if (activeTab === 'market' || selectedSymbols.length === 0) {
+        console.log("Fetching market news");
+        try {
+          // Fetch market news from API
+          data = await fetchMarketNews();
+          
+          // Update cache if we got data
+          if (data && data.length > 0) {
+            marketNewsCache.data = data;
+            marketNewsCache.timestamp = Date.now();
+          }
+        } catch (err) {
+          console.error("Market news API failed:", err);
+          // Don't fallback to mock data if USE_MOCK_DATA is false
+          setNews([]);
+          setError("Unable to load market news at this time.");
+          setIsLoading(false);
+          return;
+        }
       } else {
-        // Otherwise get news for selected symbols
-        const data = await fetchMultiSymbolNews(currentSymbols)
-        setNews(data)
+        console.log(`Fetching news for symbols: ${symbolKey}`);
+        try {
+          // Fetch symbol-specific news from API
+          data = await fetchMultiSymbolNews(selectedSymbols);
+          
+          // Update cache if we got data
+          if (data && data.length > 0) {
+            symbolNewsCache.set(symbolKey, {
+              data,
+              timestamp: Date.now()
+            });
+          }
+        } catch (err) {
+          console.error(`Symbol news API failed for ${symbolKey}:`, err);
+          // Don't fallback to mock data if USE_MOCK_DATA is false
+          setNews([]);
+          setError(`Unable to load news for ${selectedSymbols.join(', ')} at this time.`);
+          setIsLoading(false);
+          return;
+        }
       }
       
-      setIsFirstLoad(false);
+      if (data && data.length > 0) {
+        setNews(data);
+        setError(null);
+      } else {
+        // Empty data case - show a clean empty state
+        setNews([]);
+        // No error message for empty results - will show the "No news articles found" state
+      }
+      
+      hasLoadedNews.current = true;
     } catch (err) {
-      console.error('Error fetching news:', err)
-      setError('Failed to load news articles')
+      console.error('Error fetching news:', err);
+      
+      // Use a more user-friendly error message
+      let errorMessage = "Unable to load news at this time.";
+      
+      if (err instanceof Error) {
+        if (err.message.includes('API limit')) {
+          errorMessage = "API request limit reached. Please try again later.";
+        } else if (err.message.includes('No news entries found')) {
+          // This is not really an error, just no data available
+          setNews([]);
+          setError(null);
+          setIsLoading(false);
+          return;
+        }
+      } 
+      
+      setError(errorMessage);
+      setNews([]);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }, [isFirstLoad]) // Only depend on isFirstLoad
+  }, [activeTab, selectedSymbols, symbolKey, isLoading]);
   
   // Initial fetch when component mounts
   useEffect(() => {
-    if (isFirstMount.current) {
-      console.log('Initial news fetch');
+    if (!hasLoadedNews.current) {
       fetchNews();
-      isFirstMount.current = false;
     }
   }, [fetchNews]);
   
-  // Fetch news when selected symbols or tab changes, but not on first mount
+  // Refetch when selected symbols or tab changes
   useEffect(() => {
-    if (!isFirstMount.current) {
-      console.log('Fetching news due to symbol or tab change');
+    const tabChanged = prevActiveTab.current !== activeTab;
+    const symbolsChanged = prevSymbolKey.current !== symbolKey;
+    
+    if (tabChanged || symbolsChanged) {
+      console.log('Tab or symbols changed, refetching news:', { 
+        prevTab: prevActiveTab.current, 
+        currentTab: activeTab,
+        prevSymbols: prevSymbolKey.current,
+        currentSymbols: symbolKey 
+      });
+      
+      prevActiveTab.current = activeTab;
+      prevSymbolKey.current = symbolKey;
+      
+      // Clear any current news when switching tabs or symbols to avoid stale data display
+      setNews([]);
+      
+      // Fetch new data
       fetchNews();
     }
-  }, [fetchNews, selectedSymbols, activeTab]);
+  }, [activeTab, symbolKey, fetchNews]);
   
   // Handle tab change
   const handleTabChange = (value: string) => {
-    setActiveTab(value as 'all' | 'market')
+    // Only allow 'all' tab if we have selected symbols
+    if (value === 'all' && selectedSymbols.length === 0) {
+      console.log('Attempted to switch to symbols tab with no symbols selected');
+      return;
+    }
+    
+    console.log(`Tab changed from ${activeTab} to ${value}`);
+    setActiveTab(value as 'all' | 'market');
   }
   
   // Title text based on state
@@ -151,14 +289,24 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
         </div>
         
         <div className="flex items-center gap-2">
-          {selectedSymbols.length > 0 && (
-            <Tabs value={activeTab} onValueChange={handleTabChange} className="mr-2">
-              <TabsList>
-                <TabsTrigger value="all">Selected Symbols</TabsTrigger>
-                <TabsTrigger value="market">Market News</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          )}
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="min-w-[260px]">
+            <TabsList className="w-full">
+              {selectedSymbols.length > 0 ? (
+                <>
+                  <TabsTrigger value="all" className="flex-1 font-medium">
+                    Selected Symbols ({selectedSymbols.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="market" className="flex-1 font-medium">
+                    Market News
+                  </TabsTrigger>
+                </>
+              ) : (
+                <TabsTrigger value="market" className="flex-1 font-medium">
+                  Market News
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </Tabs>
           
           <Button 
             variant="ghost" 
@@ -253,7 +401,17 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
             </div>
           ) : (
             <div className="text-center py-12 text-muted-foreground h-60 flex flex-col items-center justify-center">
-              <p>No news articles found.</p>
+              <div className="flex flex-col items-center space-y-3">
+                <AlertCircle className="h-10 w-10 text-muted-foreground/50" />
+                <div className="space-y-1">
+                  <h3 className="text-sm font-medium">No news articles available</h3>
+                  <p className="text-xs text-muted-foreground">
+                    {activeTab === 'market' 
+                      ? 'There are currently no market news articles available.' 
+                      : `No news found for ${selectedSymbols.join(', ')}.`}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </CardContent>
