@@ -1,7 +1,8 @@
 'use client'
 
+import React from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import dynamic from 'next/dynamic'
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -13,8 +14,13 @@ import { formatCurrency, formatLargeNumber, formatDate } from "@/lib/formatters"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useSymbols } from "@/contexts/SymbolsContext"
 
+// Import types for properly typed dynamic imports
+import type { StockPriceChartProps } from '@/components/stock/StockPriceChart'
+import type { StockOverviewSectionProps } from '@/components/stock/StockOverviewSection'
+import type { StockNewsSectionProps } from '@/components/stock/StockNewsSection'
+
 // Lazy load components with Next.js dynamic imports
-const StockPriceChart = dynamic(
+const StockPriceChart = dynamic<StockPriceChartProps>(
   () => import('@/components/stock/StockPriceChart'),
   { 
     loading: () => <ChartSkeleton />,
@@ -22,7 +28,7 @@ const StockPriceChart = dynamic(
   }
 );
 
-const StockOverviewSection = dynamic(
+const StockOverviewSection = dynamic<StockOverviewSectionProps>(
   () => import('@/components/stock/StockOverviewSection'),
   { 
     loading: () => <OverviewSkeleton />,
@@ -30,7 +36,7 @@ const StockOverviewSection = dynamic(
   }
 );
 
-const StockNewsSection = dynamic(
+const StockNewsSection = dynamic<StockNewsSectionProps>(
   () => import('@/components/stock/StockNewsSection'),
   { 
     loading: () => <NewsSkeleton />,
@@ -131,6 +137,29 @@ function ContentState<T>({
   }
   
   return children(data);
+}
+
+// Create a simple error boundary component
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode; fallback: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
 }
 
 export default function StockDetailPage() {
@@ -378,10 +407,21 @@ export default function StockDetailPage() {
                 >
                   {(data) => (
                     <div className="h-80">
-                      <StockPriceChart 
-                        data={getPriceChartData()}
-                        symbol={symbol}
-                      />
+                      <ErrorBoundary 
+                        fallback={
+                          <Alert variant="destructive" className="h-80 flex items-center justify-center">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertDescription>Failed to load price chart</AlertDescription>
+                          </Alert>
+                        }
+                      >
+                        <Suspense fallback={<ChartSkeleton />}>
+                          <StockPriceChart 
+                            data={getPriceChartData()}
+                            symbol={symbol}
+                          />
+                        </Suspense>
+                      </ErrorBoundary>
                     </div>
                   )}
                 </ContentState>
@@ -402,11 +442,22 @@ export default function StockDetailPage() {
                   EmptyComponent={<p className="text-muted-foreground">No company data available</p>}
                 >
                   {(data) => (
-                    <StockOverviewSection 
-                      overview={data} 
-                      formatMarketCap={formatMarketCap}
-                      formatCurrency={formatCurrency}
-                    />
+                    <ErrorBoundary
+                      fallback={
+                        <Alert variant="destructive">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>Failed to load company overview</AlertDescription>
+                        </Alert>
+                      }
+                    >
+                      <Suspense fallback={<OverviewSkeleton />}>
+                        <StockOverviewSection 
+                          overview={data} 
+                          formatMarketCap={formatMarketCap}
+                          formatCurrency={formatCurrency}
+                        />
+                      </Suspense>
+                    </ErrorBoundary>
                   )}
                 </ContentState>
               </CardContent>
@@ -427,7 +478,18 @@ export default function StockDetailPage() {
                 EmptyComponent={<p className="text-muted-foreground">No news articles available</p>}
               >
                 {(data) => (
-                  <StockNewsSection news={data} formatDate={formatDate} />
+                  <ErrorBoundary
+                    fallback={
+                      <Alert variant="destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>Failed to load news articles</AlertDescription>
+                      </Alert>
+                    }
+                  >
+                    <Suspense fallback={<NewsSkeleton />}>
+                      <StockNewsSection news={data} formatDate={formatDate} />
+                    </Suspense>
+                  </ErrorBoundary>
                 )}
               </ContentState>
             </CardContent>

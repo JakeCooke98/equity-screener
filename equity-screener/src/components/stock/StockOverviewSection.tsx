@@ -6,6 +6,9 @@ interface StockOverviewSectionProps {
   formatCurrency: (value: number) => string;
 }
 
+// Make this interface available for import
+export type { StockOverviewSectionProps };
+
 export default function StockOverviewSection({ 
   overview, 
   formatMarketCap, 

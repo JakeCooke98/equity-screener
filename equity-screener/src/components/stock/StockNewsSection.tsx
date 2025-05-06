@@ -6,6 +6,9 @@ interface StockNewsSectionProps {
   formatDate: (date: Date) => string;
 }
 
+// Make this interface available for import
+export type { StockNewsSectionProps };
+
 export default function StockNewsSection({ news, formatDate }: StockNewsSectionProps) {
   return (
     <div className="space-y-6">

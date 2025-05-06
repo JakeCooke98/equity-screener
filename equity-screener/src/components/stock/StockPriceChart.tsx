@@ -12,6 +12,9 @@ interface StockPriceChartProps {
   symbol: string
 }
 
+// Make this interface available for import
+export type { StockPriceChartProps };
+
 interface CustomTooltipProps {
   active?: boolean
   payload?: Array<{
