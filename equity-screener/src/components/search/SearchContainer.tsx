@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Info, X } from 'lucide-react'
 import { useSymbols } from '@/contexts/SymbolsContext'
+import { MarketNewsPanel } from '@/components/news/MarketNewsPanel'
 
 export function SearchContainer() {
   const { toggleSymbol, isSymbolSelected, selectedSymbols } = useSymbols()
@@ -16,6 +17,9 @@ export function SearchContainer() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [infoMessage, setInfoMessage] = useState<string | null>(null)
   const prevResultsLengthRef = useRef<number>(0)
+  
+  // Track selected rows in the table for news filtering
+  const [selectedRows, setSelectedRows] = useState<string[]>([])
 
   // Handle selecting a symbol from the results table
   const handleSelectSymbol = (symbol: SymbolSearchMatch) => {
@@ -29,8 +33,21 @@ export function SearchContainer() {
       return
     }
     
-    // Simply toggle the symbol without showing messages for success/removal
+    // Toggle the symbol without showing messages for success/removal
     toggleSymbol(symbol)
+    
+    // Update selected rows for news filtering
+    updateSelectedRows(symbol)
+  }
+  
+  // Update the selectedRows array when a row is selected
+  const updateSelectedRows = (symbol: SymbolSearchMatch) => {
+    if (selectedRows.includes(symbol.symbol)) {
+      setSelectedRows(prevSelected => prevSelected.filter(s => s !== symbol.symbol))
+    } else {
+      // Keep only the most recent 3 selections for better news relevance
+      setSelectedRows(prevSelected => [...prevSelected, symbol.symbol].slice(-3))
+    }
   }
 
   // Handle search results from the SymbolSearch component
@@ -57,69 +74,74 @@ export function SearchContainer() {
   const showEmptyState = !showTable && !infoMessage
 
   return (
-    <Card className="w-full">
-      <CardHeader className="px-6 pb-3 pt-6">
-        <CardTitle>Search Securities</CardTitle>
-        <CardDescription>
-          Search by ticker symbol, company name, or keyword
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6 px-6 pb-6">
-        <SymbolSearch 
-          onSelectSymbol={handleSelectSymbol} 
-          onSearchResults={handleSearchResults}
-        />
-        
-        {/* Info message within the card (for search-related messages) */}
-        {infoMessage && (
-          <Alert variant="default">
-            <Info className="h-4 w-4" />
-            <AlertDescription>{infoMessage}</AlertDescription>
-          </Alert>
-        )}
-        
-        {/* Table of search results */}
-        {showTable && (
-          <SymbolsTable 
-            data={searchResults} 
-            isLoading={isSearching}
-            onSelectRow={handleSelectSymbol}
-            isRowSelected={isSymbolSelected}
-            className="border-none shadow-none p-0 bg-transparent"
+    <div className="space-y-6">
+      <Card className="w-full">
+        <CardHeader className="px-6 pb-3 pt-6">
+          <CardTitle>Search Securities</CardTitle>
+          <CardDescription>
+            Search by ticker symbol, company name, or keyword
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 px-6 pb-6">
+          <SymbolSearch 
+            onSelectSymbol={handleSelectSymbol} 
+            onSearchResults={handleSearchResults}
           />
-        )}
-        
-        {/* Empty state when nothing has been searched yet */}
-        {showEmptyState && (
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Info className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-            <CardTitle className="text-xl mb-2">Start Searching</CardTitle>
-            <CardDescription className="max-w-md">
-              Enter a ticker symbol, company name, or keyword in the search box above to find securities.
-            </CardDescription>
-          </div>
-        )}
-        
-        {/* Toast-like error messages in the bottom-right corner */}
-        {errorMessage && (
-          <div className="fixed bottom-4 right-4 z-50 max-w-sm">
-            <Alert 
-              variant="destructive" 
-              className="bg-red-50 text-red-800 border-red-200 shadow-lg flex items-center gap-2"
-            >
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="flex-1">{errorMessage}</AlertDescription>
-              <button 
-                onClick={() => setErrorMessage(null)} 
-                className="text-red-600 hover:text-red-800"
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Close</span>
-              </button>
+          
+          {/* Info message within the card (for search-related messages) */}
+          {infoMessage && (
+            <Alert variant="default">
+              <Info className="h-4 w-4" />
+              <AlertDescription>{infoMessage}</AlertDescription>
             </Alert>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          )}
+          
+          {/* Table of search results */}
+          {showTable && (
+            <SymbolsTable 
+              data={searchResults} 
+              isLoading={isSearching}
+              onSelectRow={handleSelectSymbol}
+              isRowSelected={isSymbolSelected}
+              className="border-none shadow-none p-0 bg-transparent"
+            />
+          )}
+          
+          {/* Empty state when nothing has been searched yet */}
+          {showEmptyState && (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Info className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
+              <CardTitle className="text-xl mb-2">Start Searching</CardTitle>
+              <CardDescription className="max-w-md">
+                Enter a ticker symbol, company name, or keyword in the search box above to find securities.
+              </CardDescription>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Market News Panel */}
+      <MarketNewsPanel selectedSymbols={selectedRows.length > 0 ? selectedRows : undefined} />
+      
+      {/* Toast-like error messages in the bottom-right corner */}
+      {errorMessage && (
+        <div className="fixed bottom-4 right-4 z-50 max-w-sm">
+          <Alert 
+            variant="destructive" 
+            className="bg-red-50 text-red-800 border-red-200 shadow-lg flex items-center gap-2"
+          >
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex-1">{errorMessage}</AlertDescription>
+            <button 
+              onClick={() => setErrorMessage(null)} 
+              className="text-red-600 hover:text-red-800"
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </button>
+          </Alert>
+        </div>
+      )}
+    </div>
   )
 } 
