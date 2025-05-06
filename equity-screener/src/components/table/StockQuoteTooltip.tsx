@@ -55,47 +55,43 @@ export function StockQuoteTooltip({
     return percent >= 0 ? 'text-green-600' : 'text-red-600'
   }
 
+  // Don't render anything if not visible to improve performance
+  if (!isVisible) {
+    return null
+  }
+
+  // Determine minimum height based on content
+  const minHeightClass = isLoading && !data ? 'min-h-[100px]' : 'min-h-[180px]'
+
   return (
     <Card 
       className={cn(
-        'p-4 shadow-lg border-2 w-64 relative', 
-        isAbove 
-          ? 'animate-in fade-in-50 slide-in-from-bottom-2 duration-150' 
-          : 'animate-in fade-in-50 slide-in-from-top-2 duration-150',
+        'p-4 w-64 shadow-lg',
+        minHeightClass,
+        'animate-in fade-in-0 zoom-in-95 duration-150',
+        isAbove ? 'origin-bottom' : 'origin-top',
         className
       )}
       style={style}
     >
-      {/* Arrow that points to the row - direction changes based on position */}
-      {isAbove ? (
-        // Downward pointing arrow when tooltip is above the row
-        <div 
-          className="absolute -bottom-2 left-1/2 transform -translate-x-1/2 w-3 h-3 rotate-45 bg-background border-r-2 border-b-2 border-border/50"
-          aria-hidden="true"
-        />
-      ) : (
-        // Upward pointing arrow when tooltip is below the row
-        <div 
-          className="absolute -top-2 left-1/2 transform -translate-x-1/2 w-3 h-3 rotate-45 bg-background border-t-2 border-l-2 border-border/50"
-          aria-hidden="true"
-        />
-      )}
-      
       <div className="flex flex-col gap-2">
         <div className="flex justify-between items-center">
           <h4 className="font-semibold">{symbol}</h4>
-          {isLoading && !data && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          {isLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
 
-        {error && (
-          <p className="text-sm text-red-600">Failed to load quote data</p>
-        )}
-
-        {isLoading && !data && (
-          <p className="text-sm text-muted-foreground">Loading quote data...</p>
-        )}
-
-        {data && !error && (
+        {error ? (
+          <div className="flex flex-col items-center justify-center h-16 mt-2">
+            <p className="text-sm text-muted-foreground text-center">
+              Could not load data for this symbol
+            </p>
+          </div>
+        ) : isLoading && !data ? (
+          <div className="flex flex-col items-center justify-center h-16 mt-2">
+            <Loader2 className="h-6 w-6 animate-spin text-primary/50 mb-2" />
+            <p className="text-sm text-muted-foreground">Loading quote data...</p>
+          </div>
+        ) : data ? (
           <>
             <div className="flex justify-between items-center">
               <span className="text-muted-foreground text-sm">Last Price</span>
@@ -124,6 +120,12 @@ export function StockQuoteTooltip({
               <span className="font-medium">{formatPrice(data.low52Week)}</span>
             </div>
           </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-16 mt-2">
+            <p className="text-sm text-muted-foreground text-center">
+              No data available
+            </p>
+          </div>
         )}
       </div>
     </Card>
