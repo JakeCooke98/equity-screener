@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useDebounce } from './useDebounce';
 import { ApiError } from '@/services/api-client';
 import { alphaVantageService, SymbolSearchMatch } from '@/services/alphaVantage/index';
+import { CacheManager } from '@/utils/cacheManager';
 
 interface UseSymbolSearchResult {
   results: SymbolSearchMatch[];
@@ -9,8 +10,8 @@ interface UseSymbolSearchResult {
   error: ApiError | null;
 }
 
-// Cache for search results to avoid redundant API calls
-const searchCache: Record<string, SymbolSearchMatch[]> = {};
+// Create a singleton cache instance for symbol search results
+const symbolSearchCache = new CacheManager<SymbolSearchMatch[]>(30 * 60 * 1000); // 30 minutes TTL
 
 /**
  * A hook for searching symbols with the Alpha Vantage API.
@@ -43,8 +44,9 @@ export function useSymbolSearch(
     }
 
     // Check cache first
-    if (searchCache[debouncedQuery]) {
-      setResults(searchCache[debouncedQuery]);
+    const cachedResults = symbolSearchCache.get(debouncedQuery);
+    if (cachedResults !== null) {
+      setResults(cachedResults);
       return;
     }
 
@@ -54,7 +56,7 @@ export function useSymbolSearch(
       try {
         const data = await alphaVantageService.searchSymbols(debouncedQuery);
         // Cache the results
-        searchCache[debouncedQuery] = data;
+        symbolSearchCache.set(debouncedQuery, data);
         setResults(data);
       } catch (err) {
         setError(err as ApiError);
@@ -72,16 +74,13 @@ export function useSymbolSearch(
 
 // Expose a static version of the search for use outside of React components
 useSymbolSearch.search = async (query: string): Promise<SymbolSearchMatch[]> => {
-  // Check cache first
-  if (searchCache[query]) {
-    return searchCache[query];
-  }
-  
   try {
-    const data = await alphaVantageService.searchSymbols(query);
-    // Cache the results
-    searchCache[query] = data;
-    return data;
+    // Use the getOrFetch method to simplify caching logic
+    return await symbolSearchCache.getOrFetch(
+      query,
+      async () => alphaVantageService.searchSymbols(query),
+      { useStaleOnError: true }
+    );
   } catch (error) {
     console.error('Static search error:', error);
     return [];

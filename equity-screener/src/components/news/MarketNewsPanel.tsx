@@ -6,33 +6,17 @@ import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Loader2, AlertCircle, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
-import { NewsArticle } from '@/services/alphaVantage'
-import { 
-  fetchMarketNews, 
-  fetchMultiSymbolNews 
-} from '@/services/alphaVantage'
+import { alphaVantageService, NewsArticle } from '@/services/alphaVantage/index'
 import { 
   generateMockMarketNews, 
   generateMockCompanyNews 
 } from '@/utils/mockStockData'
 import { cn } from '@/lib/utils'
+import { CacheManager } from '@/utils/cacheManager'
 
-// Cache for news data to prevent redundant API calls
-const marketNewsCache: {
-  data: NewsArticle[] | null;
-  timestamp: number;
-} = {
-  data: null,
-  timestamp: 0
-};
-
-const symbolNewsCache = new Map<string, {
-  data: NewsArticle[];
-  timestamp: number;
-}>();
-
-// Cache expiration time (10 minutes)
-const CACHE_EXPIRY_MS = 10 * 60 * 1000;
+// Consistent caching with CacheManager
+const marketNewsCache = new CacheManager<NewsArticle[]>(10 * 60 * 1000); // 10 minutes
+const symbolNewsCache = new CacheManager<NewsArticle[]>(10 * 60 * 1000); // 10 minutes
 
 /**
  * Formats a date string relative to current time (e.g., "2 hours ago")
@@ -139,32 +123,33 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
     
     fetchInProgress.current = true
     let shouldFetch = false
-    const now = Date.now()
     
     try {
       // Determine if we need to fetch new data
       if (activeTab === 'market' || selectedSymbols.length === 0) {
-        // Market news case
-        if (!marketNewsCache.data || (now - marketNewsCache.timestamp > CACHE_EXPIRY_MS)) {
-          shouldFetch = true
-        } else {
+        // Market news case - check cache first
+        const cachedData = marketNewsCache.get('market-news');
+        if (cachedData) {
           // Use cached market news
-          setNews(marketNewsCache.data)
-          setIsLoading(false)
-          return
+          setNews(cachedData);
+          setIsLoading(false);
+          fetchInProgress.current = false;
+          return;
         }
+        // No valid cache, need to fetch
+        shouldFetch = true;
       } else {
         // Symbol news case - check cache first
-        const cachedData = symbolNewsCache.get(symbolKey)
-        
-        if (!cachedData || (now - cachedData.timestamp > CACHE_EXPIRY_MS)) {
-          shouldFetch = true
-        } else {
+        const cachedData = symbolNewsCache.get(symbolKey);
+        if (cachedData) {
           // Use cached symbol news
-          setNews(cachedData.data)
-          setIsLoading(false)
-          return
+          setNews(cachedData);
+          setIsLoading(false);
+          fetchInProgress.current = false;
+          return;
         }
+        // No valid cache, need to fetch
+        shouldFetch = true;
       }
       
       // If we don't need to fetch, exit early
@@ -182,12 +167,11 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
         console.log("Fetching market news")
         try {
           // Fetch market news from API
-          data = await fetchMarketNews()
+          data = await alphaVantageService.fetchMarketNews()
           
           // Update cache if we got data
           if (data && data.length > 0) {
-            marketNewsCache.data = data
-            marketNewsCache.timestamp = Date.now()
+            marketNewsCache.set('market-news', data);
           }
         } catch (err) {
           console.error("Market news API failed:", err)
@@ -201,14 +185,11 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
         console.log(`Fetching news for symbols: ${symbolKey}`)
         try {
           // Fetch symbol-specific news from API
-          data = await fetchMultiSymbolNews(selectedSymbols)
+          data = await alphaVantageService.fetchMultiSymbolNews(selectedSymbols)
           
           // Update cache if we got data
           if (data && data.length > 0) {
-            symbolNewsCache.set(symbolKey, {
-              data,
-              timestamp: Date.now()
-            })
+            symbolNewsCache.set(symbolKey, data);
           }
         } catch (err) {
           console.error(`Symbol news API failed for ${symbolKey}:`, err)

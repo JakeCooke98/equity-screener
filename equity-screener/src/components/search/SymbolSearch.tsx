@@ -92,6 +92,7 @@ export function SymbolSearch({
         
         return true
       })
+      // Sort by matchScore (convert to number to ensure proper comparison)
       .sort((a, b) => {
         const scoreA = typeof a.matchScore === 'number' ? a.matchScore : parseFloat(String(a.matchScore))
         const scoreB = typeof b.matchScore === 'number' ? b.matchScore : parseFloat(String(b.matchScore))
