@@ -18,46 +18,30 @@ import {
   TableRow 
 } from '@/components/ui/table'
 import { FavoriteButton } from '@/components/favorites/FavoriteButton'
-import { ChevronRight, PlusCircle } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { ChevronRight } from 'lucide-react'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 
 // Custom event name - must match the one in FavoritesContext
 const FAVORITES_UPDATED_EVENT = 'favoritesUpdated'
 
 export default function FavoritesPage() {
-  const { favorites, removeFavorite } = useFavorites()
+  const { favorites } = useFavorites()
   const router = useRouter()
   
-  // Local state to track the symbols to display
-  const [displayedSymbols, setDisplayedSymbols] = useState<SymbolSearchMatch[]>([])
-  const [updateCounter, setUpdateCounter] = useState(0)
-  
-  // Sync displayed symbols with favorites
-  useEffect(() => {
-    // Use a deep clone to ensure we get new reference
-    setDisplayedSymbols(JSON.parse(JSON.stringify(favorites)))
-  }, [favorites, updateCounter])
-  
   // Listen for the custom favorites updated event
+  const [forceUpdate, setForceUpdate] = useState(0)
+  
   useEffect(() => {
-    const handleFavoritesUpdated = () => {
-      // Force rerender by incrementing counter
-      setUpdateCounter(prev => prev + 1)
-    }
-    
+    const handleFavoritesUpdated = () => setForceUpdate(prev => prev + 1)
     window.addEventListener(FAVORITES_UPDATED_EVENT, handleFavoritesUpdated)
-    
-    return () => {
-      window.removeEventListener(FAVORITES_UPDATED_EVENT, handleFavoritesUpdated)
-    }
+    return () => window.removeEventListener(FAVORITES_UPDATED_EVENT, handleFavoritesUpdated)
   }, [])
   
   // Check if we're on mobile
   const isSmallScreen = useMediaQuery('(max-width: 1023px)')
   
   // Determine visible columns based on screen size
-  const [visibleColumns, setVisibleColumns] = useState<string[]>([
+  const [visibleColumns, setVisibleColumns] = useState([
     'symbol', 'name', 'type', 'region'
   ])
   
@@ -74,20 +58,6 @@ export default function FavoritesPage() {
   const handleSymbolClick = useCallback((symbol: SymbolSearchMatch) => {
     router.push(`/stock/${symbol.symbol}`)
   }, [router])
-  
-  // Handle favorite changes with both local and global state updates
-  const handleFavoriteChange = useCallback((symbol: SymbolSearchMatch, isFavorited: boolean) => {
-    if (!isFavorited) {
-      // Update local state immediately for responsive UI
-      setDisplayedSymbols(current => 
-        current.filter(s => s.symbol !== symbol.symbol)
-      )
-      
-      // Ensure the global state is updated by directly calling removeFavorite
-      // This guarantees consistency across the application
-      removeFavorite(symbol)
-    }
-  }, [removeFavorite])
   
   // Handle button clicks without event propagation
   const handleButtonClick = useCallback((e: React.MouseEvent, symbol: SymbolSearchMatch) => {
@@ -110,13 +80,13 @@ export default function FavoritesPage() {
           <CardHeader className="px-6 pb-3 pt-6">
             <CardTitle>Your Watchlist</CardTitle>
             <CardDescription>
-              {displayedSymbols.length === 0
+              {favorites.length === 0
                 ? "You haven't added any securities to your watchlist yet."
-                : `You have ${displayedSymbols.length} ${displayedSymbols.length === 1 ? 'security' : 'securities'} in your watchlist.`}
+                : `You have ${favorites.length} ${favorites.length === 1 ? 'security' : 'securities'} in your watchlist.`}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-6 pb-6">
-            {displayedSymbols.length === 0 ? (
+            {favorites.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <StarIcon className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
                 <CardTitle className="text-xl mb-2">No Securities in Watchlist</CardTitle>
@@ -158,9 +128,9 @@ export default function FavoritesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayedSymbols.map((symbol) => (
+                    {favorites.map((symbol) => (
                       <TableRow 
-                        key={`${symbol.symbol}-${updateCounter}`} 
+                        key={`${symbol.symbol}-${forceUpdate}`} 
                         className="cursor-pointer group hover:bg-muted/50"
                         onClick={() => handleSymbolClick(symbol)}
                       >
@@ -170,7 +140,6 @@ export default function FavoritesPage() {
                             size="sm"
                             showTooltip={false}
                             className="hover:bg-transparent"
-                            onFavoriteChange={handleFavoriteChange}
                           />
                         </TableCell>
                         

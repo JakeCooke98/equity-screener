@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, ReactNode, useEffect, useRef, useCallback } from 'react'
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from 'react'
 import { SymbolSearchMatch } from '@/services/alphaVantage'
 
 interface FavoritesContextType {
@@ -21,8 +21,8 @@ const STORAGE_KEY = 'equity-screener-favorites'
 // Custom event for favorites changes
 const FAVORITES_UPDATED_EVENT = 'favoritesUpdated'
 
-// Function to dispatch custom events
-function dispatchFavoritesEvent() {
+// Simple function to dispatch events when favorites change
+function notifyFavoritesChanged() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(FAVORITES_UPDATED_EVENT))
   }
@@ -33,8 +33,13 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
   const [favorites, setFavorites] = useState<SymbolSearchMatch[]>([])
   const [isInitialized, setIsInitialized] = useState(false)
   
-  // Use a ref to track pending updates
-  const pendingUpdatesRef = useRef<Set<string>>(new Set())
+  // Use a ref to track the latest favorites to avoid dependency cycles
+  const favoritesRef = useRef<SymbolSearchMatch[]>([])
+  
+  // Keep the ref updated with latest favorites
+  useEffect(() => {
+    favoritesRef.current = favorites
+  }, [favorites])
 
   // Calculate favorites count from array length
   const favoritesCount = favorites.length
@@ -61,8 +66,10 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
         const savedFavorites = localStorage.getItem(STORAGE_KEY)
         if (savedFavorites) {
           const parsed = JSON.parse(savedFavorites) as SymbolSearchMatch[]
-          // Only update if there's a meaningful difference
-          if (JSON.stringify(parsed) !== JSON.stringify(favorites)) {
+          // Compare with current state using the ref instead of the state itself
+          // to avoid dependency cycles
+          const currentFavorites = favoritesRef.current
+          if (JSON.stringify(parsed) !== JSON.stringify(currentFavorites)) {
             setFavorites(parsed)
           }
         }
@@ -76,109 +83,56 @@ export function FavoritesProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener(FAVORITES_UPDATED_EVENT, handleFavoritesUpdated)
     }
-  }, [favorites])
+  }, []) // <- removed favorites dependency
 
   // Save to localStorage whenever favorites changes
   useEffect(() => {
-    // Skip initial render to avoid clearing saved favorites
     if (!isInitialized) return
     
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(favorites))
-      // Dispatch custom event to notify other components
-      dispatchFavoritesEvent()
+      notifyFavoritesChanged()
     } catch (error) {
       console.error('Error saving favorites to localStorage:', error)
     }
   }, [favorites, isInitialized])
 
   // Helper function to check if a symbol is a favorite
-  const isFavorite = useCallback((symbol: SymbolSearchMatch | string) => {
-    // Basic validation
-    if (!symbol) {
-      return false
-    }
+  const isFavorite = useCallback((symbol: SymbolSearchMatch | string): boolean => {
+    if (!symbol) return false
     
-    const symbolStr = typeof symbol === 'string' ? symbol : symbol.symbol
-    if (!symbolStr) {
-      return false
-    }
+    const symbolId = typeof symbol === 'string' ? symbol : symbol.symbol
+    if (!symbolId) return false
     
-    return favorites.some(s => s.symbol === symbolStr)
+    return favorites.some(s => s.symbol === symbolId)
   }, [favorites])
 
   const addFavorite = useCallback((symbol: SymbolSearchMatch) => {
-    const symbolId = symbol.symbol
+    if (!symbol?.symbol) return
     
-    // Skip if already processing this symbol
-    if (pendingUpdatesRef.current.has(symbolId)) {
-      return
-    }
-    
-    // Check if the symbol is already a favorite
-    const isAlreadyFavorite = favorites.some(s => s.symbol === symbolId)
-    
-    if (!isAlreadyFavorite) {
-      // Mark as being processed
-      pendingUpdatesRef.current.add(symbolId)
-      
-      // Create a new array reference to ensure state update is detected
-      setFavorites(prev => {
-        const updated = [...prev, symbol]
-        
-        // Clear from pending after update
-        setTimeout(() => {
-          pendingUpdatesRef.current.delete(symbolId)
-        }, 50)
-        
-        return updated
-      })
-    }
-  }, [favorites])
-
-  const removeFavorite = useCallback((symbol: SymbolSearchMatch | string) => {
-    const symbolId = typeof symbol === 'string' ? symbol : symbol.symbol
-    
-    // Skip if already processing this symbol
-    if (pendingUpdatesRef.current.has(symbolId)) {
-      return
-    }
-    
-    // Mark as being processed
-    pendingUpdatesRef.current.add(symbolId)
-    
-    // Create a new array reference
     setFavorites(prev => {
-      const updated = prev.filter(s => s.symbol !== symbolId)
-      
-      // Clear from pending after update
-      setTimeout(() => {
-        pendingUpdatesRef.current.delete(symbolId)
-      }, 50)
-      
-      return updated
+      // Don't add if it already exists
+      if (prev.some(s => s.symbol === symbol.symbol)) {
+        return prev
+      }
+      return [...prev, symbol]
     })
   }, [])
 
+  const removeFavorite = useCallback((symbol: SymbolSearchMatch | string) => {
+    const symbolId = typeof symbol === 'string' ? symbol : symbol.symbol
+    if (!symbolId) return
+    
+    setFavorites(prev => prev.filter(s => s.symbol !== symbolId))
+  }, [])
+
   const toggleFavorite = useCallback((symbol: SymbolSearchMatch) => {
-    const symbolId = symbol.symbol
-    
-    // Skip if already processing this symbol
-    if (pendingUpdatesRef.current.has(symbolId)) {
-      return
-    }
-    
-    const isAlreadyFavorite = isFavorite(symbol)
-    
-    // Mark as being processed
-    pendingUpdatesRef.current.add(symbolId)
-    
-    if (isAlreadyFavorite) {
+    if (isFavorite(symbol)) {
       removeFavorite(symbol)
     } else {
       addFavorite(symbol)
     }
-  }, [addFavorite, removeFavorite, isFavorite])
+  }, [isFavorite, addFavorite, removeFavorite])
 
   const clearFavorites = useCallback(() => {
     setFavorites([])

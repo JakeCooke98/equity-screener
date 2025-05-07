@@ -18,17 +18,15 @@ interface FavoriteButtonProps {
   size?: 'sm' | 'default' | 'lg'
   showTooltip?: boolean
   className?: string
-  onFavoriteChange?: (symbol: SymbolSearchMatch, isFavorited: boolean) => void
 }
 
 export function FavoriteButton({ 
   symbol, 
   size = 'default',
   showTooltip = true,
-  className,
-  onFavoriteChange
+  className
 }: FavoriteButtonProps) {
-  const { isFavorite, addFavorite, removeFavorite } = useFavorites()
+  const { isFavorite, toggleFavorite } = useFavorites()
   
   // Track favorite state locally to make updates feel instant
   const [isFavorited, setIsFavorited] = useState(false)
@@ -36,42 +34,26 @@ export function FavoriteButton({
 
   // Update local state when favorites change in context
   useEffect(() => {
-    const newState = isFavorite(symbol)
-    setIsFavorited(newState)
+    setIsFavorited(isFavorite(symbol))
   }, [isFavorite, symbol])
 
-  // Handle toggling favorite status with optimistic UI update
+  // Handle toggling favorite status
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
     e.preventDefault()
     
-    // Get current and new state
-    const currentState = isFavorited
-    const newState = !currentState
-    
     // Update local state immediately (optimistic UI)
-    setIsFavorited(newState)
+    setIsFavorited(!isFavorited)
     setIsAnimating(true)
     
-    // Notify parent component about the change if a callback was provided
-    if (onFavoriteChange) {
-      onFavoriteChange(symbol, newState)
-    }
-    
-    // Update global state directly using the appropriate function
-    if (newState) {
-      // Adding to favorites
-      addFavorite(symbol)
-    } else {
-      // Removing from favorites
-      removeFavorite(symbol)
-    }
+    // Update global state
+    toggleFavorite(symbol)
     
     // Reset animation after a brief delay
     setTimeout(() => {
       setIsAnimating(false)
     }, 300)
-  }, [isFavorited, onFavoriteChange, symbol, addFavorite, removeFavorite])
+  }, [isFavorited, symbol, toggleFavorite])
 
   const button = (
     <Button
