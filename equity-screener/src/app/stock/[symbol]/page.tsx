@@ -14,6 +14,7 @@ import { formatCurrency, formatLargeNumber, formatDate } from "@/lib/formatters"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useSymbols } from "@/contexts/SymbolsContext"
 import { RootLayout } from "@/components/layout/root-layout"
+import { FavoriteButton } from '@/components/favorites/FavoriteButton'
 
 // Import types for properly typed dynamic imports
 import type { StockPriceChartProps } from '@/components/stock/StockPriceChart'
@@ -285,6 +286,7 @@ export default function StockDetailPage() {
                   <span className="text-xl text-muted-foreground font-normal">
                     ({symbol})
                   </span>
+                  <FavoriteButton symbol={symbolObject} size="default" />
                 </>
               )}
             </h3>

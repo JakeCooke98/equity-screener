@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { usePathname } from 'next/navigation';
-import { BarChart2, Home, Zap } from 'lucide-react';
+import { BarChart2, Home, Star, Zap } from 'lucide-react';
 
 export function Header() {
   const pathname = usePathname();
@@ -42,6 +42,16 @@ export function Header() {
             <Link href="/lazy-loading-demo">
               <Zap className="h-4 w-4 mr-2" />
               Demo
+            </Link>
+          </Button>
+          <Button 
+            variant={pathname === '/favorites' ? 'default' : 'ghost'} 
+            size="sm" 
+            asChild
+          >
+            <Link href="/favorites">
+              <Star className="h-4 w-4 mr-2" />
+              Watchlist
             </Link>
           </Button>
         </nav>

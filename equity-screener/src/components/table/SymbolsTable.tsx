@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { 
   Table, 
   TableBody, 
@@ -12,18 +12,12 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { ChevronLeft, ChevronRight, PlusCircle, MinusCircle, ChevronDown, ChevronUp } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { SymbolSearchMatch } from '@/services/alphaVantage'
 import { cn } from '@/lib/utils'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { StockQuoteTooltip } from './StockQuoteTooltip'
 import { useRouter } from 'next/navigation'
+import { FavoriteButton } from '@/components/favorites/FavoriteButton'
 
 interface SymbolsTableProps {
   data: SymbolSearchMatch[]
@@ -31,6 +25,9 @@ interface SymbolsTableProps {
   onSelectRow?: (symbol: SymbolSearchMatch) => void
   isRowSelected?: (symbol: SymbolSearchMatch) => boolean
   className?: string
+  onRowClick?: (symbol: SymbolSearchMatch) => void
+  selectedRowIndex?: number
+  onToggleSelection?: (symbol: SymbolSearchMatch, index: number, event: React.MouseEvent) => void
 }
 
 export function SymbolsTable({ 
@@ -38,11 +35,14 @@ export function SymbolsTable({
   isLoading = false,
   onSelectRow,
   isRowSelected,
-  className
+  className,
+  onRowClick,
+  selectedRowIndex,
+  onToggleSelection
 }: SymbolsTableProps) {
   const router = useRouter()
   const [currentPage, setCurrentPage] = useState(1)
-  const [selectedRowIndex, setSelectedRowIndex] = useState<number | null>(null)
+  const [localSelectedIndex, setLocalSelectedIndex] = useState<number | null>(null)
   const [sorting, setSorting] = useState<{ column: string; direction: 'asc' | 'desc' } | null>(null)
   
   // State for tooltip
@@ -84,71 +84,83 @@ export function SymbolsTable({
   
   // Determine which columns to show based on screen size
   const [visibleColumns, setVisibleColumns] = useState<string[]>([
-    'symbol', 'name', 'type', 'region'
+    'favorite', 'symbol', 'name', 'type', 'region'
   ])
   
   // Update visible columns based on screen size
   useEffect(() => {
     if (isSmallScreen) {
-      setVisibleColumns(['symbol', 'name', 'type', 'region'])
+      setVisibleColumns(['favorite', 'symbol', 'name', 'type', 'region'])
     } else {
-      setVisibleColumns(['symbol', 'name', 'ticker', 'type', 'region', 'country', 'currency', 'matchScore'])
+      setVisibleColumns(['favorite', 'symbol', 'name', 'ticker', 'type', 'region', 'country', 'currency', 'matchScore'])
     }
   }, [isSmallScreen])
 
   // Define items per page
   const itemsPerPage = 10
   
+  // Reset pagination when data changes
+  useEffect(() => {
+    setCurrentPage(1)
+    setLocalSelectedIndex(null)
+  }, [data])
+
+  // Memoize sorted data to prevent unnecessary recalculations
+  const sortedData = useMemo(() => {
+    if (!sorting) return data
+    
+    return [...data].sort((a, b) => {
+      const aValue = a[sorting.column as keyof SymbolSearchMatch] || ''
+      const bValue = b[sorting.column as keyof SymbolSearchMatch] || ''
+      
+      if (sorting.column === 'matchScore') {
+        const aScore = parseFloat(aValue as string) || 0
+        const bScore = parseFloat(bValue as string) || 0
+        return sorting.direction === 'asc' ? aScore - bScore : bScore - aScore
+      }
+      
+      const aStr = aValue.toString().toLowerCase()
+      const bStr = bValue.toString().toLowerCase()
+      
+      return sorting.direction === 'asc' 
+        ? aStr.localeCompare(bStr)
+        : bStr.localeCompare(aStr)
+    })
+  }, [data, sorting])
+
   // Calculate total pages
   const totalPages = Math.max(1, Math.ceil(data.length / itemsPerPage))
-  
+
+  // Memoize current page data and indices
+  const { currentData, startIndex, endIndex } = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    const end = Math.min(start + itemsPerPage, sortedData.length)
+    return {
+      currentData: sortedData.slice(start, end),
+      startIndex: start,
+      endIndex: end
+    }
+  }, [sortedData, currentPage, itemsPerPage])
+
   // Ensure current page is valid
-  if (currentPage > totalPages) {
-    setCurrentPage(totalPages)
-  }
-  
-  // Sort data
-  const sortedData = sorting 
-    ? [...data].sort((a, b) => {
-        const aValue = a[sorting.column as keyof SymbolSearchMatch] || ''
-        const bValue = b[sorting.column as keyof SymbolSearchMatch] || ''
-        
-        // For match score, parse as float
-        if (sorting.column === 'matchScore') {
-          const aScore = parseFloat(aValue as string) || 0
-          const bScore = parseFloat(bValue as string) || 0
-          return sorting.direction === 'asc' ? aScore - bScore : bScore - aScore
-        }
-        
-        // For other string values
-        const aStr = aValue.toString().toLowerCase()
-        const bStr = bValue.toString().toLowerCase()
-        
-        return sorting.direction === 'asc' 
-          ? aStr.localeCompare(bStr)
-          : bStr.localeCompare(aStr)
-      })
-    : data
-  
-  // Calculate start and end indices for the current page
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = Math.min(startIndex + itemsPerPage, sortedData.length)
-  
-  // Get current page data
-  const currentData = sortedData.slice(startIndex, endIndex)
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
   
   // Pagination handlers
   const goToNextPage = () => {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1)
-      setSelectedRowIndex(null)
+      setLocalSelectedIndex(null)
     }
   }
   
   const goToPrevPage = () => {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1)
-      setSelectedRowIndex(null)
+      setLocalSelectedIndex(null)
     }
   }
 
@@ -158,11 +170,15 @@ export function SymbolsTable({
     event.stopPropagation()
     
     // Update the local selected row state
-    setSelectedRowIndex(isRowSelected && isRowSelected(symbol) ? null : index)
+    setLocalSelectedIndex(isRowSelected && isRowSelected(symbol) ? null : index)
     
     // Call the onSelectRow handler if provided
     if (onSelectRow) {
       onSelectRow(symbol)
+    }
+
+    if (onToggleSelection) {
+      onToggleSelection(symbol, index, event)
     }
   }
   
@@ -170,6 +186,10 @@ export function SymbolsTable({
   const handleRowClick = (symbol: SymbolSearchMatch) => {
     // Navigate to stock detail page using the symbol
     router.push(`/stock/${symbol.symbol}`)
+
+    if (onRowClick) {
+      onRowClick(symbol)
+    }
   }
   
   // Sort handler
@@ -267,79 +287,106 @@ export function SymbolsTable({
 
   // Render the rows with selected state if available
   const renderRows = () => {
-    return currentData.map((symbol, index) => {
-      // Determine if row is selected based on context or local state
-      const isSelected = 
-        isRowSelected 
-          ? isRowSelected(symbol) 
-          : selectedRowIndex === index
+    if (isLoading) {
+      // Return loading skeleton rows (unchanged)
+      return Array.from({ length: itemsPerPage }, (_, i) => (
+        <TableRow key={`loading-${i}`} className="animate-pulse">
+          {/* Add favorite column skeleton */}
+          <TableCell className="w-10 p-2">
+            <div className="h-5 w-5 rounded-full bg-muted" />
+          </TableCell>
+          {visibleColumns.filter(col => col !== 'favorite').map((column, index) => (
+            <TableCell key={`${column}-${index}`}>
+              <div className="h-5 w-full rounded bg-muted" 
+                style={{ width: column === 'name' ? '100%' : '60%' }} 
+              />
+            </TableCell>
+          ))}
+          {/* Action column skeleton */}
+          <TableCell className="w-10 p-2 text-right">
+            <div className="h-5 w-5 rounded-full bg-muted ml-auto" />
+          </TableCell>
+        </TableRow>
+      ));
+    }
+
+    if (currentData.length === 0) {
+      return (
+        <TableRow>
+          <TableCell colSpan={visibleColumns.length + 2} className="h-24 text-center">
+            No results.
+          </TableCell>
+        </TableRow>
+      );
+    }
+
+    return currentData.map((symbol, rowIndex) => {
+      const isSelected = isRowSelected ? isRowSelected(symbol) : selectedRowIndex === rowIndex || localSelectedIndex === rowIndex;
       
-          
       return (
         <TableRow 
-          key={symbol.symbol && symbol.region ? 
-            `${symbol.symbol}-${symbol.region}` : 
-            `result-${index}`}
-          className={`cursor-pointer hover:bg-muted/50 ${isSelected ? 'bg-primary/5' : ''}`}
+          key={`${symbol.symbol}-${rowIndex}`}
+          className={cn(
+            "cursor-pointer group",
+            isSelected ? "bg-primary/10" : "hover:bg-muted/50"
+          )}
           onClick={() => handleRowClick(symbol)}
           onMouseEnter={(e) => handleRowMouseEnter(e, symbol.symbol)}
           onMouseLeave={handleRowMouseLeave}
-          onTouchStart={(e) => {
-            // For touch devices, show tooltip on touch
-            // Cast the touch event properly to avoid type errors
-            const syntheticEvent = {
-              currentTarget: e.currentTarget,
-              preventDefault: e.preventDefault,
-              stopPropagation: e.stopPropagation
-            } as React.MouseEvent<HTMLTableRowElement>;
-            
-            handleRowMouseEnter(syntheticEvent, symbol.symbol);
-          }}
-          onTouchEnd={handleRowMouseLeave}
-          onTouchCancel={handleRowMouseLeave}
         >
-          {visibleColumns.includes('symbol') && (
+          {/* Favorite button column */}
+          <TableCell className="w-10 p-2">
+            <FavoriteButton 
+              symbol={symbol} 
+              size="sm"
+              showTooltip={false}
+              className="hover:bg-transparent"
+            />
+          </TableCell>
+          
+          {/* Render other columns */}
+          {visibleColumns.includes('symbol') && visibleColumns.indexOf('symbol') !== -1 && (
             <TableCell className="px-6 py-4 font-medium text-primary">
               {symbol.symbol || 'Unknown'}
             </TableCell>
           )}
-          
+           
           {visibleColumns.includes('name') && (
             <TableCell className="px-6 py-4 max-w-xs truncate">
               {symbol.name || 'Unknown'}
             </TableCell>
           )}
-          
+           
           {visibleColumns.includes('ticker') && (
             <TableCell className="px-6 py-4">
               {symbol.symbol ? `${symbol.symbol}.${symbol.region || 'UNK'}` : 'Unknown'}
             </TableCell>
           )}
-          
+           
           {visibleColumns.includes('type') && (
             <TableCell className="px-6 py-4">
               {symbol.type || 'Unknown'}
             </TableCell>
           )}
-          
+           
           {visibleColumns.includes('region') && (
             <TableCell className="px-6 py-4">
               {symbol.region || 'Unknown'}
             </TableCell>
           )}
-          
+           
           {visibleColumns.includes('country') && (
             <TableCell className="px-6 py-4">
               {symbol.country || symbol.region || 'Unknown'}
             </TableCell>
           )}
-          
+           
           {visibleColumns.includes('currency') && (
             <TableCell className="px-6 py-4">
               {symbol.currency || 'Unknown'}
             </TableCell>
           )}
-          
+           
           {visibleColumns.includes('matchScore') && (
             <TableCell className="px-6 py-4">
               <div className="flex items-center gap-2">
@@ -356,12 +403,13 @@ export function SymbolsTable({
             </TableCell>
           )}
           
+          {/* Action button for dashboard add/remove */}
           <TableCell className="px-6 py-4 text-right">
             <Button 
               size="sm" 
               variant={isSelected ? "default" : "ghost"}
               className="h-7 w-7 p-0" 
-              onClick={(e) => handleToggleSelection(symbol, index, e)}
+              onClick={(e) => handleToggleSelection(symbol, rowIndex, e)}
               title={isSelected ? `Remove ${symbol.symbol}` : `Add ${symbol.symbol}`}
             >
               {isSelected ? (
@@ -373,151 +421,46 @@ export function SymbolsTable({
             </Button>
           </TableCell>
         </TableRow>
-      )
-    })
+      );
+    });
   }
 
   return (
-    <div className="w-full">
-      <div className="rounded-md border overflow-auto relative">
-        <Table>
-          {data.length > 0 && (
-            <TableCaption className="px-6 pb-2">
-              Showing {startIndex + 1} to {endIndex} of {data.length} results
-            </TableCaption>
-          )}
-          <TableHeader className="bg-muted/50">
-            <TableRow>
-              {visibleColumns.includes('symbol') && (
-                <TableHead 
-                  className="px-6 font-semibold text-foreground cursor-pointer"
-                  onClick={() => handleSort('symbol')}
-                >
-                  <div className="flex items-center">
-                    Symbol
-                    {getSortIcon('symbol')}
-                  </div>
-                </TableHead>
-              )}
-              
-              {visibleColumns.includes('name') && (
-                <TableHead 
-                  className="px-6 font-semibold text-foreground cursor-pointer"
-                  onClick={() => handleSort('name')}
-                >
-                  <div className="flex items-center">
-                    Company Name
-                    {getSortIcon('name')}
-                  </div>
-                </TableHead>
-              )}
-              
-              {visibleColumns.includes('ticker') && (
-                <TableHead 
-                  className="px-6 font-semibold text-foreground cursor-pointer"
-                  onClick={() => handleSort('ticker')}
-                >
-                  <div className="flex items-center">
-                    Bloomberg Ticker
-                    {getSortIcon('ticker')}
-                  </div>
-                </TableHead>
-              )}
-              
-              {visibleColumns.includes('type') && (
-                <TableHead 
-                  className="px-6 font-semibold text-foreground cursor-pointer"
-                  onClick={() => handleSort('type')}
-                >
-                  <div className="flex items-center whitespace-nowrap">
-                    Asset Class
-                    {getSortIcon('type')}
-                  </div>
-                </TableHead>
-              )}
-              
-              {visibleColumns.includes('region') && (
-                <TableHead 
-                  className="px-6 font-semibold text-foreground cursor-pointer"
-                  onClick={() => handleSort('region')}
-                >
-                  <div className="flex items-center">
-                    Region
-                    {getSortIcon('region')}
-                  </div>
-                </TableHead>
-              )}
-              
-              {visibleColumns.includes('country') && (
-                <TableHead 
-                  className="px-6 font-semibold text-foreground cursor-pointer"
-                  onClick={() => handleSort('country')}
-                >
-                  <div className="flex items-center">
-                    Country
-                    {getSortIcon('country')}
-                  </div>
-                </TableHead>
-              )}
-              
-              {visibleColumns.includes('currency') && (
-                <TableHead 
-                  className="px-6 font-semibold text-foreground cursor-pointer"
-                  onClick={() => handleSort('currency')}
-                >
-                  <div className="flex items-center">
-                    Currency
-                    {getSortIcon('currency')}
-                  </div>
-                </TableHead>
-              )}
-              
-              {visibleColumns.includes('matchScore') && (
-                <TableHead 
-                  className="px-6 font-semibold text-foreground cursor-pointer"
-                  onClick={() => handleSort('matchScore')}
-                >
-                  <div className="flex items-center">
-                    Match Score
-                    {getSortIcon('matchScore')}
-                  </div>
-                </TableHead>
-              )}
-              
-              <TableHead className="px-6 w-[80px] text-right font-semibold text-foreground">
-                Action
+    <div className={cn("w-full", className)}>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {/* Favorite column header */}
+            <TableHead className="w-10 p-2"></TableHead>
+            
+            {/* Filter visible columns to exclude the favorite column */}
+            {visibleColumns.filter(col => col !== 'favorite').map((column) => (
+              <TableHead 
+                key={column}
+                className={cn(
+                  "whitespace-nowrap",
+                  // Additional classes for specific columns
+                )}
+                onClick={() => handleSort(column)}
+              >
+                <span className="flex items-center cursor-pointer">
+                  {column === 'symbol' ? 'Ticker' :
+                   column === 'ticker' ? 'ID' :
+                   column === 'matchScore' ? 'Relevance' :
+                   column.charAt(0).toUpperCase() + column.slice(1)}
+                  {getSortIcon(column)}
+                </span>
               </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              // Loading state
-              Array.from({ length: 5 }).map((_, i) => (
-                <TableRow key={`loading-${i}`} className="animate-pulse">
-                  {visibleColumns.map((column, idx) => (
-                    <TableCell key={`loading-${i}-${column}`} className="px-6 py-4">
-                      <div className="h-4 w-16 bg-muted rounded"></div>
-                    </TableCell>
-                  ))}
-                  <TableCell className="px-6 py-4 text-right">
-                    <div className="h-4 w-8 bg-muted rounded ml-auto"></div>
-                  </TableCell>
-                </TableRow>
-              ))
-            ) : currentData.length === 0 ? (
-              // Empty state
-              <TableRow>
-                <TableCell colSpan={visibleColumns.length + 1} className="h-24 text-center text-muted-foreground">
-                  No results found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              // Data rows
-              renderRows()
-            )}
-          </TableBody>
-        </Table>
-      </div>
+            ))}
+            
+            {/* Action column header */}
+            <TableHead className="w-10 p-2 text-right"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {renderRows()}
+        </TableBody>
+      </Table>
       
       {/* Stock quote tooltip */}
       {tooltipSymbol && tooltipPosition.top && tooltipPosition.left && isTooltipVisible && (
@@ -536,11 +479,12 @@ export function SymbolsTable({
         />
       )}
       
-      {/* Pagination */}
-      {data.length > itemsPerPage && (
-        <div className="flex items-center justify-between px-6 pt-2 pb-4 border-t">
-          <div className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between py-3 px-2">
+          <div className="flex-1 text-sm text-muted-foreground">
+            Showing <span className="font-medium">{startIndex + 1}</span> to <span className="font-medium">{endIndex}</span> of{" "}
+            <span className="font-medium">{data.length}</span> results
           </div>
           <div className="flex items-center space-x-2">
             <Button
@@ -548,20 +492,23 @@ export function SymbolsTable({
               size="sm"
               onClick={goToPrevPage}
               disabled={currentPage === 1}
-              className="h-7 w-7 p-0"
+              className="h-8 w-8 p-0"
             >
+              <span className="sr-only">Go to previous page</span>
               <ChevronLeft className="h-4 w-4" />
-              <span className="sr-only">Previous Page</span>
             </Button>
+            <div className="text-sm font-medium">
+              Page {currentPage} of {totalPages}
+            </div>
             <Button
               variant="outline"
               size="sm"
               onClick={goToNextPage}
               disabled={currentPage === totalPages}
-              className="h-7 w-7 p-0"
+              className="h-8 w-8 p-0"
             >
+              <span className="sr-only">Go to next page</span>
               <ChevronRight className="h-4 w-4" />
-              <span className="sr-only">Next Page</span>
             </Button>
           </div>
         </div>
