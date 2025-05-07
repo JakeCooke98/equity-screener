@@ -213,7 +213,7 @@ export function DashboardContent() {
               </div>
             </div>
             <CardDescription>
-              Comparing closing prices for selected securities (last 12 months)
+              Comparing closing prices for selected securities
             </CardDescription>
           </CardHeader>
           <CardContent className="px-6 pb-6">
