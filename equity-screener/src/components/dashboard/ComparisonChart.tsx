@@ -1,6 +1,6 @@
 'use client'
 
-import { SymbolSearchMatch } from '@/services/alphaVantage'
+import { SymbolSearchMatch } from '@/services/alphaVantage/index'
 import { cn } from '@/lib/utils'
 import { useState, useCallback, useMemo } from 'react'
 import {

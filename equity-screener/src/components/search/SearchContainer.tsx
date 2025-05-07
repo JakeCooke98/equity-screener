@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { SymbolSearch } from '@/components/search/SymbolSearch'
 import { SymbolsTable } from '@/components/table/SymbolsTable'
-import { SymbolSearchMatch } from '@/services/alphaVantage'
+import { SymbolSearchMatch } from '@/services/alphaVantage/index'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useSymbols } from '@/contexts/SymbolsContext'
 import { MarketNewsPanel } from '@/components/news/MarketNewsPanel'

@@ -327,7 +327,7 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
               description={activeTab === 'market' 
                 ? 'There are currently no market news articles available.' 
                 : `No news found for ${selectedSymbols.join(', ')}.`}
-              type="default"
+              type="empty"
               heightClass="h-60"
             />
           )}

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Star } from 'lucide-react'
 import { useFavorites } from '@/contexts/FavoritesContext'
-import { SymbolSearchMatch } from '@/services/alphaVantage'
+import { SymbolSearchMatch } from '@/services/alphaVantage/index'
 import { cn } from '@/lib/utils'
 import {
   Tooltip,

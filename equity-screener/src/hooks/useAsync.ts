@@ -3,6 +3,10 @@ import { ApiError } from '@/services/api-client'
 
 /**
  * Status of the async operation
+ * - idle: Initial state, not started
+ * - pending: Operation in progress
+ * - success: Operation completed successfully
+ * - error: Operation failed
  */
 export type AsyncStatus = 'idle' | 'pending' | 'success' | 'error'
 
@@ -33,8 +37,41 @@ export interface UseAsyncOptions<T> {
 }
 
 /**
- * Hook to handle async operations with standardized loading, error, and data states
+ * Hook to handle async operations with standardized loading, error, and data states.
  * 
+ * This hook provides a consistent way to manage asynchronous operations across
+ * the application, with built-in support for loading states, error handling,
+ * and automatic retrigger when dependencies change.
+ * 
+ * Features:
+ * - Loading, success, and error states
+ * - Optional immediate execution
+ * - Dependency-based re-execution
+ * - Success and error callbacks
+ * - Ability to reset state
+ * 
+ * @example
+ * ```tsx
+ * const {
+ *   execute,
+ *   data,
+ *   error,
+ *   isLoading,
+ * } = useAsync(
+ *   async () => {
+ *     const data = await fetchData(id);
+ *     return data;
+ *   },
+ *   {
+ *     immediate: true,
+ *     deps: [id],
+ *     onSuccess: (data) => console.log('Data loaded', data),
+ *     onError: (error) => console.error('Failed to load', error)
+ *   }
+ * );
+ * ```
+ * 
+ * @template T - The type of data returned by the async function
  * @param asyncFunction - The async function to execute
  * @param options - Options for the hook
  * @returns An object with the async state and execute function
@@ -67,7 +104,12 @@ export function useAsync<T>(
     onErrorRef.current = onError
   }, [asyncFunction, onSuccess, onError])
 
-  // The execute function that will trigger the async operation
+  /**
+   * The execute function that will trigger the async operation.
+   * Can be called manually to trigger the operation.
+   * 
+   * @returns A promise that resolves to the async operation result
+   */
   const execute = useCallback(async (): Promise<T | undefined> => {
     setStatus('pending')
     setError(null)
@@ -123,6 +165,10 @@ export function useAsync<T>(
     isLoading,
     isSuccess,
     isError,
+    /**
+     * Resets the hook state to its initial values.
+     * Use this to clear data and errors, for example before unmounting.
+     */
     reset: useCallback(() => {
       setStatus('idle')
       setError(null)

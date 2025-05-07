@@ -19,7 +19,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import { useSymbolSearch } from '@/hooks/useSymbolSearch'
-import { SymbolSearchMatch } from '@/services/alphaVantage'
+import { SymbolSearchMatch } from '@/services/alphaVantage/index'
 import { ErrorMessage } from '@/components/ui/error-message'
 import { Skeleton } from '@/components/ui/skeleton'
 

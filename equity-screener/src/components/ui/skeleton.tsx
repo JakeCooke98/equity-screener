@@ -1,35 +1,57 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
 
+/**
+ * Props for the Skeleton component
+ */
 interface SkeletonProps {
   /**
-   * The className of the skeleton.
+   * Additional CSS classes to apply to the skeleton
    */
   className?: string
   /**
-   * Whether to show the skeleton as a circle.
+   * Whether to render the skeleton as a circle
+   * @default false
    */
   circle?: boolean
   /**
-   * The width of the skeleton.
+   * Width of the skeleton (number in pixels or CSS string)
    */
   width?: string | number
   /**
-   * The height of the skeleton.
+   * Height of the skeleton (number in pixels or CSS string)
    */
   height?: string | number
   /**
-   * Whether to show the skeleton in a row with a space between.
+   * Whether to arrange multiple skeletons horizontally in a row
+   * @default false
    */
   row?: boolean
   /**
-   * The count of skeletons to render.
+   * Number of skeleton elements to render
+   * @default 1
    */
   count?: number
 }
 
 /**
- * Skeleton component for showing loading states
+ * Skeleton component for displaying loading states.
+ * 
+ * This component renders a placeholder with a pulse animation that can be
+ * used while content is being loaded. It supports customizing dimensions,
+ * arrangement, and can render multiple instances.
+ * 
+ * @example
+ * ```tsx
+ * // Basic usage
+ * <Skeleton height={20} className="w-full" />
+ * 
+ * // Multiple skeletons in a row
+ * <Skeleton height={24} row count={3} />
+ * 
+ * // Avatar placeholder
+ * <Skeleton circle width={40} height={40} />
+ * ```
  */
 export function Skeleton({
   className,
@@ -82,7 +104,22 @@ export function Skeleton({
 }
 
 /**
- * SkeletonNews component for showing loading states for news cards
+ * Skeleton component specifically designed for news articles loading states.
+ * 
+ * This component renders a grid of skeleton cards that mimic the layout of news articles,
+ * including image placeholders, headlines, timestamps, and article summaries.
+ * 
+ * @example
+ * ```tsx
+ * // Default usage with 6 news items
+ * <SkeletonNews />
+ * 
+ * // Custom number of news items
+ * <SkeletonNews count={3} />
+ * ```
+ * 
+ * @param props - Component props
+ * @param props.count - Number of news article skeletons to render (default: 6)
  */
 export function SkeletonNews({ count = 6 }: { count?: number }) {
   return (
@@ -104,7 +141,23 @@ export function SkeletonNews({ count = 6 }: { count?: number }) {
 }
 
 /**
- * SkeletonSymbolTable component for showing loading states for symbol tables
+ * Skeleton component for displaying a loading state for data tables.
+ * 
+ * This component renders a table-like structure with header skeletons and
+ * row skeletons to represent a loading state for tabular data such as
+ * search results or stock listings.
+ * 
+ * @example
+ * ```tsx
+ * // Default usage with 5 rows
+ * <SkeletonSymbolTable />
+ * 
+ * // Custom number of rows
+ * <SkeletonSymbolTable rows={10} />
+ * ```
+ * 
+ * @param props - Component props
+ * @param props.rows - Number of table rows to render as skeletons (default: 5)
  */
 export function SkeletonSymbolTable({ rows = 5 }: { rows?: number }) {
   return (
@@ -126,7 +179,17 @@ export function SkeletonSymbolTable({ rows = 5 }: { rows?: number }) {
 }
 
 /**
- * SkeletonChart component for showing loading states for charts
+ * Skeleton component for displaying a loading state for charts and graphs.
+ * 
+ * This component renders a placeholder for charts that includes a simulated
+ * header with title and control buttons, the main chart area, and x-axis labels.
+ * Use this when loading financial charts or other data visualizations.
+ * 
+ * @example
+ * ```tsx
+ * // Usage in a chart container
+ * {isLoading ? <SkeletonChart /> : <ActualChart data={data} />}
+ * ```
  */
 export function SkeletonChart() {
   return (

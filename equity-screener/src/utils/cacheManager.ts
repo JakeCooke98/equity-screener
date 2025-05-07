@@ -1,37 +1,81 @@
 /**
- * Generic cache manager for storing API responses and other data
- * Provides consistent caching across the application
+ * Generic cache manager for storing API responses and other data.
+ * 
+ * This utility provides a consistent caching mechanism across the application with features like:
+ * - Time-based expiration (TTL)
+ * - Stale-while-revalidate pattern
+ * - Fallback to stale data on errors
+ * - Cache key management
+ * - Lazy data fetching
+ * 
+ * @module CacheManager
  */
 
 // Default cache expiry time (10 minutes)
 const DEFAULT_EXPIRY_MS = 10 * 60 * 1000;
 
+/**
+ * Represents a single entry in the cache
+ * @template T - The type of data being cached
+ */
 export interface CacheEntry<T> {
+  /** The cached data */
   data: T;
+  /** Timestamp when the entry was created (milliseconds since epoch) */
   timestamp: number;
 }
 
+/**
+ * Options for cache operations
+ */
 export interface CacheOptions {
-  /** Time-to-live in milliseconds */
+  /** Time-to-live in milliseconds. Defaults to the CacheManager's default TTL. */
   ttl?: number;
-  /** Whether to use stale data if fetch fails */
+  /** Whether to return stale data if fetch fails or data is expired. Defaults to false. */
   useStaleOnError?: boolean;
 }
 
+/**
+ * A generic caching utility for managing data with time-based expiration.
+ * 
+ * This class provides methods for storing, retrieving, and managing cached data
+ * with support for time-to-live (TTL), fallback to stale data, and cache invalidation.
+ * 
+ * @example
+ * ```typescript
+ * // Create a cache for user data that expires after 5 minutes
+ * const userCache = new CacheManager<User>(5 * 60 * 1000);
+ * 
+ * // Get or fetch user data
+ * const user = await userCache.getOrFetch(
+ *   `user-${userId}`,
+ *   () => fetchUserFromApi(userId),
+ *   { useStaleOnError: true }
+ * );
+ * ```
+ * 
+ * @template T - The type of data being cached
+ */
 export class CacheManager<T> {
   private cache: Map<string, CacheEntry<T>>;
   private defaultTtl: number;
 
+  /**
+   * Creates a new CacheManager instance
+   * 
+   * @param defaultTtl - Default time-to-live in milliseconds for cache entries
+   */
   constructor(defaultTtl = DEFAULT_EXPIRY_MS) {
     this.cache = new Map();
     this.defaultTtl = defaultTtl;
   }
 
   /**
-   * Get an item from the cache
-   * @param key Cache key
-   * @param options Cache options
-   * @returns The cached item or null if not found or expired
+   * Get an item from the cache if it exists and is not expired
+   * 
+   * @param key - Cache key to look up
+   * @param options - Cache options to customize behavior
+   * @returns The cached item or null if not found or expired (unless useStaleOnError is true)
    */
   get(key: string, options?: CacheOptions): T | null {
     const entry = this.cache.get(key);
@@ -56,10 +100,11 @@ export class CacheManager<T> {
   }
 
   /**
-   * Set an item in the cache
-   * @param key Cache key
-   * @param data Data to cache
-   * @returns The cache entry
+   * Store an item in the cache
+   * 
+   * @param key - Cache key to store the data under
+   * @param data - Data to cache
+   * @returns The created cache entry
    */
   set(key: string, data: T): CacheEntry<T> {
     const entry: CacheEntry<T> = {
@@ -73,8 +118,9 @@ export class CacheManager<T> {
 
   /**
    * Check if the cache has a valid (not expired) entry for the key
-   * @param key Cache key
-   * @param options Cache options
+   * 
+   * @param key - Cache key to check
+   * @param options - Cache options to customize behavior
    * @returns Whether the cache has a valid entry
    */
   has(key: string, options?: CacheOptions): boolean {
@@ -89,11 +135,14 @@ export class CacheManager<T> {
   }
 
   /**
-   * Get an item from the cache or call the fetch function to get it
-   * @param key Cache key
-   * @param fetchFn Function to call if the item is not in the cache
-   * @param options Cache options
+   * Get an item from the cache or call the fetch function to get it.
+   * This implements the cache-then-network pattern.
+   * 
+   * @param key - Cache key to look up
+   * @param fetchFn - Function to call if the item is not in the cache or is expired
+   * @param options - Cache options to customize behavior
    * @returns The cached item or the result of the fetch function
+   * @throws Will rethrow any error from the fetch function unless useStaleOnError is true
    */
   async getOrFetch(
     key: string, 
@@ -133,7 +182,8 @@ export class CacheManager<T> {
 
   /**
    * Clear the entire cache or a specific key
-   * @param key Optional key to clear
+   * 
+   * @param key - Optional key to clear, if not provided the entire cache is cleared
    */
   clear(key?: string): void {
     if (key) {
@@ -145,7 +195,8 @@ export class CacheManager<T> {
 
   /**
    * Clear all expired entries from the cache
-   * @param ttl Custom TTL to use instead of the default
+   * 
+   * @param ttl - Custom TTL to use instead of the default
    * @returns Number of entries cleared
    */
   clearExpired(ttl?: number): number {

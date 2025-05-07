@@ -8,7 +8,7 @@ import { StarIcon } from 'lucide-react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
-import { SymbolSearchMatch } from '@/services/alphaVantage'
+import { SymbolSearchMatch } from '@/services/alphaVantage/index'
 import { 
   Table, 
   TableBody, 

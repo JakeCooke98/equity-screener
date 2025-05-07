@@ -1,4 +1,4 @@
-import { SymbolSearchMatch } from '@/services/alphaVantage';
+import { SymbolSearchMatch } from '@/services/alphaVantage/index';
 
 /**
  * Mock data for the symbol search API
