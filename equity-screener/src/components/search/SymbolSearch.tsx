@@ -92,7 +92,11 @@ export function SymbolSearch({
         
         return true
       })
-      .sort((a, b) => parseFloat(b.matchScore) - parseFloat(a.matchScore))
+      .sort((a, b) => {
+        const scoreA = typeof a.matchScore === 'number' ? a.matchScore : parseFloat(String(a.matchScore))
+        const scoreB = typeof b.matchScore === 'number' ? b.matchScore : parseFloat(String(b.matchScore))
+        return scoreB - scoreA
+      })
     
     setFilteredResults(newFilteredResults)
   }, [results, filters])

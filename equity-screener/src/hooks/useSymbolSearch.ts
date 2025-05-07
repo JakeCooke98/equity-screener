@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useDebounce } from './useDebounce';
-import { ApiError, searchSymbols, SymbolSearchMatch } from '@/services/alphaVantage';
+import { ApiError } from '@/services/api-client';
+import { alphaVantageService, SymbolSearchMatch } from '@/services/alphaVantage/index';
 
 interface UseSymbolSearchResult {
   results: SymbolSearchMatch[];
@@ -51,7 +52,7 @@ export function useSymbolSearch(
       setIsLoading(true);
       
       try {
-        const data = await searchSymbols(debouncedQuery);
+        const data = await alphaVantageService.searchSymbols(debouncedQuery);
         // Cache the results
         searchCache[debouncedQuery] = data;
         setResults(data);
@@ -77,7 +78,7 @@ useSymbolSearch.search = async (query: string): Promise<SymbolSearchMatch[]> => 
   }
   
   try {
-    const data = await searchSymbols(query);
+    const data = await alphaVantageService.searchSymbols(query);
     // Cache the results
     searchCache[query] = data;
     return data;

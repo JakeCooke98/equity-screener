@@ -31,13 +31,23 @@ export function StockQuoteTooltip({
   }, [isVisible, data, isLoading, fetchQuote, symbol])
 
   // Format price with two decimal places and appropriate locale
-  const formatPrice = (price: number) => {
+  const formatPrice = (price: number | undefined | null) => {
+    // Handle null/undefined values
+    if (price === undefined || price === null) {
+      return '$0.00';
+    }
+    
+    // Handle NaN values
+    if (isNaN(price)) {
+      return '$0.00';
+    }
+    
     return price.toLocaleString('en-US', {
       style: 'currency',
       currency: 'USD',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    })
+    });
   }
 
   // Format change percentage

@@ -10,7 +10,7 @@ import { AlertCircle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { SymbolChips } from './SymbolChips'
 import { ComparisonChart } from './ComparisonChart'
-import { TimeSeriesData, fetchTimeSeriesData } from '@/services/alphaVantage'
+import { alphaVantageService, TimeSeriesData } from '@/services/alphaVantage/index'
 
 type ChartType = 'line' | 'bar'
 
@@ -46,7 +46,7 @@ export function DashboardContent() {
           }
           
           try {
-            const data = await fetchTimeSeriesData(symbol.symbol)
+            const data = await alphaVantageService.fetchTimeSeriesData(symbol.symbol)
             newData[symbol.symbol] = data
           } catch (err) {
             console.error(`Error fetching data for ${symbol.symbol}:`, err)
@@ -83,8 +83,9 @@ export function DashboardContent() {
     const allDates = new Set<string>()
     selectedSymbols.forEach(symbol => {
       if (timeSeriesData[symbol.symbol]) {
-        timeSeriesData[symbol.symbol].data.forEach(point => {
-          allDates.add(point.date)
+        timeSeriesData[symbol.symbol].dataPoints.forEach(point => {
+          // Convert date to string format for consistency
+          allDates.add(point.date.toISOString().split('T')[0])
         })
       }
     })
@@ -101,7 +102,9 @@ export function DashboardContent() {
       // Add close price for each symbol
       selectedSymbols.forEach(symbol => {
         if (timeSeriesData[symbol.symbol]) {
-          const point = timeSeriesData[symbol.symbol].data.find(p => p.date === date)
+          const point = timeSeriesData[symbol.symbol].dataPoints.find(p => 
+            p.date.toISOString().split('T')[0] === date
+          )
           if (point) {
             // Ensure price is a valid number
             const price = typeof point.close === 'number' ? point.close : parseFloat(point.close as any)

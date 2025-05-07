@@ -1,8 +1,12 @@
 import { useState, useCallback, useEffect } from 'react';
-import { StockQuoteData, fetchStockQuote } from '@/services/alphaVantage';
+import { alphaVantageService, StockQuoteData } from '@/services/alphaVantage/index';
+import { ApiError } from '@/services/api-client';
 
 // In-memory cache to store quote data and avoid duplicate API calls
-const quoteCache: Record<string, StockQuoteData> = {};
+const quoteCache: Record<string, { data: StockQuoteData; timestamp: number }> = {};
+
+// Cache TTL: 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
 
 interface UseStockQuoteResult {
   data: StockQuoteData | null;
@@ -22,8 +26,10 @@ interface UseStockQuoteResult {
  */
 export function useStockQuote(symbol: string): UseStockQuoteResult {
   const [data, setData] = useState<StockQuoteData | null>(
-    // Initialize with cached data if available
-    quoteCache[symbol] || null
+    // Initialize with cached data if available and not expired
+    quoteCache[symbol] && 
+    (Date.now() - quoteCache[symbol].timestamp < CACHE_TTL) ? 
+    quoteCache[symbol].data : null
   );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,15 +37,18 @@ export function useStockQuote(symbol: string): UseStockQuoteResult {
   // When the symbol changes, reset the data state
   useEffect(() => {
     // Clear the data state when the symbol changes
-    setData(quoteCache[symbol] || null);
+    const cachedEntry = quoteCache[symbol];
+    const isCacheValid = cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_TTL);
     
-    // Only show loading state if we don't have cached data
-    setIsLoading(!quoteCache[symbol]);
+    setData(isCacheValid ? cachedEntry.data : null);
+    
+    // Only show loading state if we don't have valid cached data
+    setIsLoading(!isCacheValid);
     
     setError(null);
     
-    // Immediately fetch new data for the symbol if not in cache
-    if (symbol && !quoteCache[symbol]) {
+    // Immediately fetch new data for the symbol if not in cache or cache is expired
+    if (symbol && !isCacheValid) {
       fetchQuote();
     }
   }, [symbol]);
@@ -54,19 +63,12 @@ export function useStockQuote(symbol: string): UseStockQuoteResult {
       return;
     }
     
-    // If we already have data in the cache, check if it's still fresh (< 5 minutes old)
-    if (quoteCache[symbol]) {
-      const cachedData = quoteCache[symbol];
-      const lastUpdated = new Date(cachedData.lastUpdated).getTime();
-      const now = new Date().getTime();
-      const fiveMinutesInMs = 5 * 60 * 1000;
-      
-      // If data is less than 5 minutes old, use the cached version
-      if (now - lastUpdated < fiveMinutesInMs) {
-        setData(cachedData);
-        setIsLoading(false);
-        return;
-      }
+    // If we already have data in the cache, check if it's still fresh
+    const cachedEntry = quoteCache[symbol];
+    if (cachedEntry && (Date.now() - cachedEntry.timestamp < CACHE_TTL)) {
+      setData(cachedEntry.data);
+      setIsLoading(false);
+      return;
     }
     
     // If no cache or data is stale, fetch fresh data
@@ -74,30 +76,29 @@ export function useStockQuote(symbol: string): UseStockQuoteResult {
     setError(null);
     
     try {
-      const quoteData = await fetchStockQuote(symbol);
+      const quoteData = await alphaVantageService.fetchQuoteData(symbol, { 
+        enabled: true, 
+        ttl: CACHE_TTL 
+      });
       
-      // Safety check - ensure we got valid data back
-      if (!quoteData || !quoteData.symbol) {
-        console.warn(`Received invalid quote data for ${symbol}`);
-        throw new Error('Invalid quote data received');
-      }
+      // Update our local cache and state
+      quoteCache[symbol] = {
+        data: quoteData,
+        timestamp: Date.now()
+      };
       
-      // Update cache and state
-      quoteCache[symbol] = quoteData;
       setData(quoteData);
     } catch (err) {
-      // Instead of showing the error, just log it and use mock data
       console.error(`Error fetching quote for ${symbol}:`, err);
       
       // If we have cached data, continue using it even if it's stale
-      if (quoteCache[symbol]) {
+      if (cachedEntry) {
         console.log(`Using stale cached data for ${symbol}`);
-        setData(quoteCache[symbol]);
+        setData(cachedEntry.data);
       } else {
-        // If no error message is available, use a generic one
-        const errorMessage = err instanceof Error ? 
-          err.message : 
-          'Failed to fetch quote data';
+        // Extract error message
+        const errorMessage = (err as ApiError)?.message || 
+          (err instanceof Error ? err.message : 'Failed to fetch quote data');
         
         setError(errorMessage);
       }

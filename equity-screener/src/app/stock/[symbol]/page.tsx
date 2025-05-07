@@ -4,13 +4,12 @@ import React from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useState, useEffect, useCallback, useMemo, Suspense } from 'react'
 import dynamic from 'next/dynamic'
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ArrowLeft, BarChart2, AlertCircle } from "lucide-react"
-import { fetchCompanyOverview, fetchCompanyNews, fetchTimeSeriesData, CompanyOverview, NewsArticle, TimeSeriesData, SymbolSearchMatch } from "@/services/alphaVantage"
-import { formatCurrency, formatLargeNumber, formatDate } from "@/lib/formatters"
+import { AlertCircle } from "lucide-react"
+import { alphaVantageService, CompanyOverview, NewsArticle, TimeSeriesData, SymbolSearchMatch } from "@/services/alphaVantage/index"
+import { formatCurrency, formatLargeNumber, formatDate as formatDateLib } from "@/lib/formatters"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useSymbols } from "@/contexts/SymbolsContext"
 import { RootLayout } from "@/components/layout/root-layout"
@@ -22,29 +21,26 @@ import type { StockOverviewSectionProps } from '@/components/stock/StockOverview
 import type { StockNewsSectionProps } from '@/components/stock/StockNewsSection'
 
 // Lazy load components with Next.js dynamic imports
-const StockPriceChart = dynamic<StockPriceChartProps>(
-  () => import('@/components/stock/StockPriceChart'),
-  { 
-    loading: () => <ChartSkeleton />,
-    ssr: false
-  }
-);
+const StockPriceChart = dynamic(() => import('@/components/stock/StockPriceChart'), { 
+  ssr: false,
+  loading: () => <ChartSkeleton />
+})
 
-const StockOverviewSection = dynamic<StockOverviewSectionProps>(
-  () => import('@/components/stock/StockOverviewSection'),
+const StockOverviewSectionComponent = dynamic(() => 
+  import('@/components/stock/StockOverviewSection').then(mod => ({ default: mod.StockOverviewSection })),
   { 
     loading: () => <OverviewSkeleton />,
     ssr: false
   }
-);
+)
 
-const StockNewsSection = dynamic<StockNewsSectionProps>(
-  () => import('@/components/stock/StockNewsSection'),
+const StockNewsSectionComponent = dynamic(() => 
+  import('@/components/stock/StockNewsSection').then(mod => ({ default: mod.StockNewsSection })),
   { 
     loading: () => <NewsSkeleton />,
     ssr: false
   }
-);
+)
 
 // Skeleton loaders
 function HeaderSkeleton() {
@@ -159,11 +155,8 @@ export default function StockDetailPage() {
     name: overview?.Name || symbol,
     type: overview?.Sector || "Stock",
     region: overview?.Exchange || "US",
-    marketOpen: "",
-    marketClose: "",
-    timezone: "",
     currency: overview?.Currency || "USD",
-    matchScore: "1.0"
+    matchScore: 1.0
   }), [symbol, overview]);
   
   // Check if symbol is in dashboard directly from context
@@ -172,22 +165,55 @@ export default function StockDetailPage() {
     return selectedSymbols.some(s => s.symbol === symbol);
   }, [selectedSymbols, symbol]);
   
+  // Format date for display
+  const formatDate = useCallback((dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }, [])
+  
   // Process stock data for charts based on timeframe
   const getPriceChartData = () => {
-    if (!timeSeriesData) return []
+    if (!timeSeriesData || !timeSeriesData.dataPoints || timeSeriesData.dataPoints.length === 0) {
+      return [];
+    }
     
     // Filter data based on selected timeframe
     const monthsToShow = timeframe === '1m' ? 1 : 
                           timeframe === '3m' ? 3 : 
-                          timeframe === '6m' ? 6 : 12
+                          timeframe === '6m' ? 6 : 12;
     
-    const filteredData = timeSeriesData.data.slice(0, monthsToShow)
+    const currentDate = new Date();
+    const oldestDate = new Date(currentDate);
+    oldestDate.setMonth(currentDate.getMonth() - monthsToShow);
     
-    // Return in format expected by chart component
-    return filteredData.map(point => ({
-      date: point.date,
-      price: point.close
-    })).reverse() // Reverse to show oldest to newest
+    // Create a proper type for our return value
+    type ChartDataPoint = { date: string; price: number };
+    const chartData: ChartDataPoint[] = [];
+    
+    // Filter dataPoints based on date range and sort by date
+    const filteredPoints = timeSeriesData.dataPoints
+      .filter(point => point.date >= oldestDate)
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    
+    // Map data points with proper type conversion
+    for (const point of filteredPoints) {
+      let priceValue: number;
+      
+      if (typeof point.close === 'number') {
+        priceValue = point.close;
+      } else {
+        // Safely convert to number, defaulting to 0 if invalid
+        const parsed = parseFloat(String(point.close));
+        priceValue = isNaN(parsed) ? 0 : parsed;
+      }
+      
+      chartData.push({
+        date: point.date.toISOString().split('T')[0],
+        price: priceValue
+      });
+    }
+    
+    return chartData;
   }
   
   // Fetch company data
@@ -209,7 +235,7 @@ export default function StockDetailPage() {
     // Fetch company overview
     const fetchOverview = async () => {
       try {
-        const data = await fetchCompanyOverview(symbol)
+        const data = await alphaVantageService.fetchCompanyOverview(symbol)
         setOverview(data)
       } catch (err) {
         console.error("Error fetching company overview:", err)
@@ -222,7 +248,7 @@ export default function StockDetailPage() {
     // Fetch company news
     const fetchNews = async () => {
       try {
-        const data = await fetchCompanyNews(symbol)
+        const data = await alphaVantageService.fetchCompanyNews(symbol)
         setNews(data)
       } catch (err) {
         console.error("Error fetching news:", err)
@@ -235,7 +261,7 @@ export default function StockDetailPage() {
     // Fetch price history
     const fetchPriceHistory = async () => {
       try {
-        const data = await fetchTimeSeriesData(symbol)
+        const data = await alphaVantageService.fetchTimeSeriesData(symbol)
         setTimeSeriesData(data)
       } catch (err) {
         console.error("Error fetching price history:", err)
@@ -352,7 +378,7 @@ export default function StockDetailPage() {
                     >
                       <Suspense fallback={<ChartSkeleton />}>
                         <StockPriceChart 
-                          data={getPriceChartData()}
+                          data={getPriceChartData() as Array<{date: string, price: number}>}
                           symbol={symbol}
                         />
                       </Suspense>
@@ -387,7 +413,7 @@ export default function StockDetailPage() {
                     }
                   >
                     <Suspense fallback={<OverviewSkeleton />}>
-                      <StockOverviewSection 
+                      <StockOverviewSectionComponent 
                         overview={overview} 
                         formatMarketCap={formatMarketCap}
                         formatCurrency={formatCurrency}
@@ -424,7 +450,7 @@ export default function StockDetailPage() {
                   }
                 >
                   <Suspense fallback={<NewsSkeleton />}>
-                    <StockNewsSection news={news} formatDate={formatDate} />
+                    <StockNewsSectionComponent news={news} formatDate={formatDate} />
                   </Suspense>
                 </ErrorBoundary>
               )}
