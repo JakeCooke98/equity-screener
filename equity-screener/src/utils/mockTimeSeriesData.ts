@@ -1,4 +1,4 @@
-import { TimeSeriesDataPoint } from "@/services/alphaVantage";
+import { TimeSeriesDataPoint } from "@/services/alphaVantage/index";
 
 // Mock data for popular symbols
 export const mockTimeSeriesData: Record<string, TimeSeriesDataPoint[]> = {
@@ -53,7 +53,7 @@ function generateTimeSeriesForSymbol(
     const volume = Math.round(volumeBase + Math.random() * volumeBase);
     
     data.push({
-      date: date.toISOString().split('T')[0],
+      date: date,
       open: parseFloat(open.toFixed(2)),
       high: parseFloat(high.toFixed(2)),
       low: parseFloat(low.toFixed(2)),

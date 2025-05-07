@@ -1,4 +1,4 @@
-import { StockQuoteData } from "@/services/alphaVantage";
+import { StockQuoteData } from "@/services/alphaVantage/index";
 
 /**
  * Generate mock quote data for a symbol
@@ -23,7 +23,13 @@ function generateMockQuoteData(symbol: string): StockQuoteData {
       changePercent: parseFloat(changePercent.toFixed(2)),
       high52Week: parseFloat(high52Week.toFixed(2)),
       low52Week: parseFloat(low52Week.toFixed(2)),
-      lastUpdated: new Date().toISOString(),
+      latestTradingDay: new Date(),
+      open: parseFloat((basePrice * 0.98).toFixed(2)),
+      high: parseFloat((basePrice * 1.03).toFixed(2)),
+      low: parseFloat((basePrice * 0.97).toFixed(2)),
+      volume: Math.floor(Math.random() * 10000000),
+      previousClose: parseFloat((basePrice * 0.99).toFixed(2)),
+      change: parseFloat((basePrice * changePercent / 100).toFixed(2))
     };
   } 
 

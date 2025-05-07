@@ -1,4 +1,4 @@
-import { CompanyOverview, NewsArticle } from "@/services/alphaVantage";
+import { CompanyOverview, NewsArticle } from "@/services/alphaVantage/index";
 import { generateMockQuoteData } from "./mockQuoteData";
 
 /**
@@ -75,8 +75,8 @@ function generateMockCompanyOverview(symbol: string): CompanyOverview {
       DividendYield: dividend,
       EPS: eps,
       Beta: beta,
-      FiftyTwoWeekHigh: quoteData.high52Week.toString(),
-      FiftyTwoWeekLow: quoteData.low52Week.toString()
+      FiftyTwoWeekHigh: (quoteData.high52Week ?? 0).toString(),
+      FiftyTwoWeekLow: (quoteData.low52Week ?? 0).toString()
     };
   }
   
