@@ -5,10 +5,10 @@ import { SymbolSearch } from '@/components/search/SymbolSearch'
 import { SymbolsTable } from '@/components/table/SymbolsTable'
 import { SymbolSearchMatch } from '@/services/alphaVantage'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle, Info, X } from 'lucide-react'
 import { useSymbols } from '@/contexts/SymbolsContext'
 import { MarketNewsPanel } from '@/components/news/MarketNewsPanel'
+import { ErrorMessage } from '@/components/ui/error-message'
+import { EmptyState } from '@/components/ui/empty-state'
 
 export function SearchContainer() {
   const { toggleSymbol, isSymbolSelected, selectedSymbols } = useSymbols()
@@ -77,10 +77,11 @@ export function SearchContainer() {
           
           {/* Info message within the card (for search-related messages) */}
           {infoMessage && (
-            <Alert variant="default">
-              <Info className="h-4 w-4" />
-              <AlertDescription>{infoMessage}</AlertDescription>
-            </Alert>
+            <ErrorMessage
+              error={infoMessage}
+              severity="info"
+              onDismiss={() => setInfoMessage(null)}
+            />
           )}
           
           {/* Table of search results */}
@@ -96,13 +97,12 @@ export function SearchContainer() {
           
           {/* Empty state when nothing has been searched yet */}
           {showEmptyState && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Info className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-              <CardTitle className="text-xl mb-2">Start Searching</CardTitle>
-              <CardDescription className="max-w-md">
-                Enter a ticker symbol, company name, or keyword in the search box above to find securities.
-              </CardDescription>
-            </div>
+            <EmptyState
+              title="Start Searching"
+              description="Enter a ticker symbol, company name, or keyword in the search box above to find securities."
+              type="search"
+              heightClass="py-12"
+            />
           )}
         </CardContent>
       </Card>
@@ -113,20 +113,11 @@ export function SearchContainer() {
       {/* Toast-like error messages in the bottom-right corner */}
       {errorMessage && (
         <div className="fixed bottom-4 right-4 z-50 max-w-sm">
-          <Alert 
-            variant="destructive" 
-            className="bg-red-50 text-red-800 border-red-200 shadow-lg flex items-center gap-2"
-          >
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="flex-1">{errorMessage}</AlertDescription>
-            <button 
-              onClick={() => setErrorMessage(null)} 
-              className="text-red-600 hover:text-red-800"
-            >
-              <X className="h-4 w-4" />
-              <span className="sr-only">Close</span>
-            </button>
-          </Alert>
+          <ErrorMessage
+            error={errorMessage}
+            onDismiss={() => setErrorMessage(null)}
+            className="shadow-lg"
+          />
         </div>
       )}
     </div>

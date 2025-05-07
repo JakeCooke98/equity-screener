@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/command'
 import { useSymbolSearch } from '@/hooks/useSymbolSearch'
 import { SymbolSearchMatch } from '@/services/alphaVantage'
+import { ErrorMessage } from '@/components/ui/error-message'
 
 interface FilterOptions {
   type?: string;
@@ -252,14 +253,10 @@ export function SymbolSearch({
 
       {/* Status message for error states - only shown when needed */}
       {error && (
-        <div className="py-3 text-center text-sm rounded-md bg-destructive/10 text-destructive border border-destructive/20">
-          <div className="flex items-center justify-center gap-2">
-            <span>Error: {error.message}</span>
-            <Button size="sm" variant="outline" onClick={() => setQuery('')} className="h-7 px-2">
-              Clear search
-            </Button>
-          </div>
-        </div>
+        <ErrorMessage 
+          error={error}
+          onDismiss={() => setQuery('')}
+        />
       )}
     </div>
   )

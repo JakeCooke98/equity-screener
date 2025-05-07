@@ -4,13 +4,14 @@ import { useSymbols } from '@/contexts/SymbolsContext'
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ChartBarIcon, ChartLineIcon, Loader2 } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle } from 'lucide-react'
+import { ChartBarIcon, ChartLineIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { SymbolChips } from './SymbolChips'
 import { ComparisonChart } from './ComparisonChart'
 import { alphaVantageService, TimeSeriesData } from '@/services/alphaVantage/index'
+import { ErrorMessage } from '@/components/ui/error-message'
+import { EmptyState } from '@/components/ui/empty-state'
+import { LoadingIndicator } from '@/components/ui/loading-indicator'
 
 type ChartType = 'line' | 'bar'
 
@@ -201,18 +202,28 @@ export function DashboardContent() {
           </CardHeader>
           <CardContent className="px-6 pb-6">
             {isLoading ? (
-              <div className="flex justify-center items-center h-92">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              </div>
+              <LoadingIndicator 
+                size="lg" 
+                text="Loading price data..." 
+                heightClass="h-92" 
+              />
             ) : error ? (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <ErrorMessage 
+                error={error} 
+                showRetry={true}
+                onRetry={() => {
+                  setIsLoading(true);
+                  setTimeSeriesData({});
+                  setError(null);
+                }}
+              />
             ) : chartData.length === 0 ? (
-              <div className="flex justify-center items-center h-92 text-muted-foreground">
-                No data available for the selected symbols
-              </div>
+              <EmptyState
+                title="No price data available"
+                description="There is no price data available for the selected symbols."
+                type="error"
+                heightClass="h-92"
+              />
             ) : (
               <ComparisonChart
                 data={chartData} 
@@ -224,18 +235,22 @@ export function DashboardContent() {
           </CardContent>
         </Card>
       ) : (
-        <Alert variant="default" className="bg-muted/50">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Please select at least one symbol to display price charts
-          </AlertDescription>
-        </Alert>
+        <EmptyState
+          title="No symbols selected"
+          description="Please select at least one symbol to display price charts"
+          type="search"
+          actionLabel="Search Symbols"
+          onAction={() => router.push('/')}
+          heightClass="h-60"
+        />
       )}
       
       {hasMaxSymbols && (
-        <p className="text-sm text-muted-foreground">
-          Maximum number of symbols (5) reached for comparison. Remove a symbol to add a different one.
-        </p>
+        <ErrorMessage
+          error="Maximum limit reached"
+          description="Maximum number of symbols (5) reached for comparison. Remove a symbol to add a different one."
+          severity="warning"
+        />
       )}
     </div>
   )

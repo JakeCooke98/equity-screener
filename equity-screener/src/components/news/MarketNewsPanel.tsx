@@ -3,16 +3,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Loader2, AlertCircle, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
 import { alphaVantageService, NewsArticle } from '@/services/alphaVantage/index'
-import { 
-  generateMockMarketNews, 
-  generateMockCompanyNews 
-} from '@/utils/mockStockData'
 import { cn } from '@/lib/utils'
 import { CacheManager } from '@/utils/cacheManager'
+import { ErrorMessage } from '@/components/ui/error-message'
+import { EmptyState } from '@/components/ui/empty-state'
+import { LoadingIndicator } from '@/components/ui/loading-indicator'
 
 // Consistent caching with CacheManager
 const marketNewsCache = new CacheManager<NewsArticle[]>(10 * 60 * 1000); // 10 minutes
@@ -326,14 +324,17 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
       )}>
         <CardContent className="px-6 pb-6">
           {isLoading ? (
-            <div className="flex justify-center items-center h-60">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
+            <LoadingIndicator 
+              size="lg" 
+              text="Loading news articles..." 
+              heightClass="h-60" 
+            />
           ) : error ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <ErrorMessage 
+              error={error} 
+              showRetry={true}
+              onRetry={fetchNews}
+            />
           ) : news.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 min-h-[400px]">
               {news.map((article, index) => (
@@ -366,7 +367,7 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
                         }}
                       />
                       <div className="absolute inset-0 flex items-center justify-center bg-muted">
-                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground opacity-25" />
+                        <LoadingIndicator size="sm" />
                       </div>
                     </div>
                   )}
@@ -401,19 +402,14 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
               ))}
             </div>
           ) : (
-            <div className="text-center py-12 text-muted-foreground h-60 flex flex-col items-center justify-center">
-              <div className="flex flex-col items-center space-y-3">
-                <AlertCircle className="h-10 w-10 text-muted-foreground/50" />
-                <div className="space-y-1">
-                  <h3 className="text-sm font-medium">No news articles available</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {activeTab === 'market' 
-                      ? 'There are currently no market news articles available.' 
-                      : `No news found for ${selectedSymbols.join(', ')}.`}
-                  </p>
-                </div>
-              </div>
-            </div>
+            <EmptyState
+              title="No news articles available"
+              description={activeTab === 'market' 
+                ? 'There are currently no market news articles available.' 
+                : `No news found for ${selectedSymbols.join(', ')}.`}
+              type="default"
+              heightClass="h-60"
+            />
           )}
         </CardContent>
       </div>
