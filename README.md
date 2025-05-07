@@ -1,24 +1,32 @@
 # Equity Screener
 
-A web-based platform for searching equities, viewing them in a rich table, drilling into detail pages, and exploring an interactive dashboard—all powered by the Alpha Vantage API.
+A modern, feature-rich web application for searching, analyzing, and monitoring stocks and other financial instruments powered by Alpha Vantage API with real-time data visualization.
 
 ## Features
 
-- **Live Search**: Search for stocks, ETFs, and other securities with real-time suggestions as you type
-- **Filtering Options**: Filter search results by type, region, or other relevant fields
-- **Results Table**: View matches in a paginated table with extensive information
-- **Interactive Dashboard**: Compare multiple symbols with interactive charts
-- **Detail Pages**: Explore in-depth information for individual symbols
-- **Responsive Design**: Works seamlessly on desktop and mobile devices
+- **Advanced Symbol Search**: Search for stocks, ETFs, and other securities with real-time suggestions, filtering by asset type, region, and more
+- **Market News**: View latest market news and symbol-specific news with comprehensive filtering
+- **Interactive Dashboard**: Compare multiple symbols with responsive charts and performance metrics
+- **Stock Details**: Deep dive into individual stocks with price charts, news, and company information
+- **Favorites Management**: Save and track your favorite symbols across sessions 
+- **Responsive Design**: Fully responsive UI that works seamlessly across desktop, tablet, and mobile
+- **Optimized Performance**: Built with modern web techniques including lazy loading and efficient caching
 
 ## Tech Stack
 
-- **Framework**: Next.js (App Router)
-- **Language**: TypeScript
-- **Styling**: TailwindCSS
-- **UI Components**: ShadCN UI
-- **Charts**: Recharts.js
-- **Data**: Alpha Vantage API
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript 5
+- **UI Components**: 
+  - Shadcn UI
+  - Radix UI for accessible primitives
+  - Tailwind CSS 4 for styling
+- **State Management**: React hooks and context
+- **Data Fetching**: Custom async hooks with caching
+- **Data Visualization**: Recharts for interactive charts
+- **URL State Management**: nuqs for search parameters
+- **Testing**: Jest and React Testing Library 
+- **Icons**: Lucide React
+- **Tables**: TanStack Table v8
 
 ## Getting Started
 
@@ -43,10 +51,12 @@ cd equity-screener
 npm install
 ```
 
-3. Create a `.env.local` file in the root directory with your Alpha Vantage API key:
+3. Create a `.env.local` file in the root directory with the following variables:
 
 ```
 NEXT_PUBLIC_ALPHA_VANTAGE_API_KEY=your_api_key_here
+NEXT_PUBLIC_API_BASE_URL=https://www.alphavantage.co/query
+NEXT_PUBLIC_USE_MOCK_DATA=false
 ```
 
 4. Start the development server:
@@ -57,37 +67,57 @@ npm run dev
 
 5. Open your browser and navigate to `http://localhost:3000`
 
-### API Usage and Mock Data
+6. Run tests:
 
-The application uses the Alpha Vantage API for both symbol search and time series data:
+```bash
+npm test          # Run all tests
+npm run test:watch     # Run tests in watch mode
+npm run test:coverage  # Generate coverage report
+```
 
-- **Symbol Search API**: Used to find matching stocks, ETFs, and other securities
-- **Time Series Monthly API**: Used to fetch monthly OHLCV price data for the dashboard charts
+### Alpha Vantage API Usage
 
-By default, the application prioritizes using the actual API when an API key is available. Mock data is only used as a fallback in the following cases:
-- When no API key is provided
-- When the API key is invalid or the API request fails
-- When `NEXT_PUBLIC_USE_MOCK_DATA=true` is set in your environment (for testing/development)
+The application offers three modes of operation:
 
-**Note on API Limits**: The free tier of Alpha Vantage has a limit of 5 requests per minute and 500 requests per day. The app includes caching mechanisms to minimize API calls, but be aware of these limitations during use.
+1. **Live API Mode**: Uses real Alpha Vantage API calls (default when API key is provided)
+2. **Mock Data Mode**: Uses realistic mock data (activate by setting `NEXT_PUBLIC_USE_MOCK_DATA=true`)
+3. **Fallback Mode**: Automatically falls back to mock data when API requests fail
+
+**Note on API Limits**: Alpha Vantage's free tier has limits of 5 requests per minute and 500 requests per day. The application implements caching to minimize API calls and respect these limits.
 
 ## Project Structure
 
-- `/src/app`: Next.js pages and layouts
-- `/src/components`: React components
-  - `/ui`: ShadCN UI components
-  - `/search`: Search-related components
-- `/src/hooks`: Custom React hooks
-- `/src/services`: API clients and service layers
-- `/src/utils`: Utility functions and mock data
-- `/public`: Static assets
+```
+/src
+  /app             # Next.js App Router pages and layouts
+    /dashboard     # Dashboard page
+    /favorites     # Favorites page
+    /stock/[symbol]# Stock detail page
+  /components      # React components organized by feature
+    /dashboard     # Dashboard-specific components
+    /favorites     # Favorites components
+    /layout        # Layout components
+    /news          # News components
+    /search        # Search components
+    /stock         # Stock detail components
+    /table         # Table components
+    /ui            # Shadcn UI components
+  /contexts        # React contexts for state management
+  /hooks           # Custom React hooks
+  /lib             # Utility libraries and helpers
+  /services        # API service layer
+    /alphaVantage  # Alpha Vantage API client
+  /utils           # Utility functions, caching, mock data
+```
 
-## Architecture Decisions
+## Architecture Highlights
 
-- **Component Structure**: Components are organized by feature with separation of concerns
-- **API Handling**: All API calls are abstracted into service modules with proper error handling
-- **State Management**: React hooks and context for state management with minimal client components
-- **TypeScript**: Strong typing throughout the application for better developer experience and code quality
-- **Accessibility**: Components are designed with accessibility in mind, including proper ARIA attributes
-- **Error Handling**: Comprehensive error handling for API requests and user interactions
-
+- **Component Architecture**: Feature-focused component organization with clear separation of concerns
+- **Server/Client Components**: Leverages Next.js App Router with strategic use of server and client components
+- **Data Management**:
+  - Efficient caching with TTL support
+  - Stale-while-revalidate pattern for better UX
+  - Error handling with fallbacks
+- **Responsive Design**: Mobile-first approach with Tailwind CSS
+- **Accessibility**: ARIA-compliant components using Radix UI primitives
+- **Testing Strategy**: Unit tests with mocked services for predictable and fast testing
