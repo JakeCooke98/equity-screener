@@ -21,6 +21,7 @@ import {
 import { useSymbolSearch } from '@/hooks/useSymbolSearch'
 import { SymbolSearchMatch } from '@/services/alphaVantage'
 import { ErrorMessage } from '@/components/ui/error-message'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface FilterOptions {
   type?: string;
@@ -170,84 +171,100 @@ export function SymbolSearch({
 
       {/* Filter options - always visible */}
       <div className="flex gap-2 flex-wrap">
-        <div className="flex gap-2 flex-wrap">
-          {/* Type filter */}
-          {uniqueTypes.length > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant={filters.type ? "default" : "outline"} size="sm" className="h-8">
-                  <FilterIcon className="h-3.5 w-3.5 mr-2" />
-                  Asset Type
-                  {filters.type && (
-                    <Badge variant="secondary" className="ml-2 bg-primary/20 hover:bg-primary/20">
-                      {filters.type}
-                    </Badge>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search types..." />
-                  <CommandList>
-                    <CommandGroup>
-                      {uniqueTypes.map(type => (
-                        <CommandItem
-                          key={type}
-                          onSelect={() => toggleTypeFilter(type)}
-                          className={filters.type === type ? 'bg-muted' : ''}
-                        >
-                          {type}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          )}
-
-          {/* Region filter */}
-          {uniqueRegions.length > 0 && (
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant={filters.region ? "default" : "outline"} size="sm" className="h-8">
-                  <FilterIcon className="h-3.5 w-3.5 mr-2" />
-                  Region
-                  {filters.region && (
-                    <Badge variant="secondary" className="ml-2 bg-primary/20 hover:bg-primary/20">
-                      {filters.region}
-                    </Badge>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search regions..." />
-                  <CommandList>
-                    <CommandGroup>
-                      {uniqueRegions.map(region => (
-                        <CommandItem
-                          key={region}
-                          onSelect={() => toggleRegionFilter(region)}
-                          className={filters.region === region ? 'bg-muted' : ''}
-                        >
-                          {region}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
-          )}
-        </div>
-
-        {/* Clear filters button */}
-        {(filters.type || filters.region) && (
-          <Button variant="ghost" size="sm" className="h-8" onClick={clearFilters}>
-            <X className="h-3.5 w-3.5 mr-2" />
-            Clear filters
-          </Button>
+        {/* Show skeleton UI while loading initial filter options */}
+        {!isInitialized ? (
+          <>
+            <Skeleton className="h-8 w-28" />
+            <Skeleton className="h-8 w-28" />
+            <Skeleton className="h-8 w-24" />
+          </>
+        ) : (
+          <>
+            <div className="flex gap-2 flex-wrap">
+              {/* Type filter */}
+              {uniqueTypes.length > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant={filters.type ? "default" : "outline"} size="sm" className="h-8">
+                      <FilterIcon className="h-3.5 w-3.5 mr-2" />
+                      Asset Type
+                      {filters.type && (
+                        <Badge variant="secondary" className="ml-2 bg-primary/20 hover:bg-primary/20">
+                          {filters.type}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search types..." />
+                      <CommandList>
+                        <CommandGroup>
+                          {uniqueTypes.map(type => (
+                            <CommandItem
+                              key={type}
+                              onSelect={() => toggleTypeFilter(type)}
+                              className={filters.type === type ? 'bg-muted' : ''}
+                            >
+                              {type}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              )}
+              
+              {/* Region filter */}
+              {uniqueRegions.length > 0 && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant={filters.region ? "default" : "outline"} size="sm" className="h-8">
+                      <FilterIcon className="h-3.5 w-3.5 mr-2" />
+                      Region
+                      {filters.region && (
+                        <Badge variant="secondary" className="ml-2 bg-primary/20 hover:bg-primary/20">
+                          {filters.region}
+                        </Badge>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search regions..." />
+                      <CommandList>
+                        <CommandGroup>
+                          {uniqueRegions.map(region => (
+                            <CommandItem
+                              key={region}
+                              onSelect={() => toggleRegionFilter(region)}
+                              className={filters.region === region ? 'bg-muted' : ''}
+                            >
+                              {region}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              )}
+            </div>
+            
+            {/* Clear filters button - only show if filters are active */}
+            {(filters.type || filters.region) && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={clearFilters}
+                className="h-8"
+              >
+                <X className="h-3.5 w-3.5 mr-2" />
+                Clear filters
+              </Button>
+            )}
+          </>
         )}
       </div>
 

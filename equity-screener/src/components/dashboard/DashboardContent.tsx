@@ -1,7 +1,7 @@
 'use client'
 
 import { useSymbols } from '@/contexts/SymbolsContext'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ChartBarIcon, ChartLineIcon } from 'lucide-react'
@@ -11,67 +11,75 @@ import { ComparisonChart } from './ComparisonChart'
 import { alphaVantageService, TimeSeriesData } from '@/services/alphaVantage/index'
 import { ErrorMessage } from '@/components/ui/error-message'
 import { EmptyState } from '@/components/ui/empty-state'
-import { LoadingIndicator } from '@/components/ui/loading-indicator'
+import { useAsync } from '@/hooks/useAsync'
+import { SkeletonChart } from '@/components/ui/skeleton'
 
 type ChartType = 'line' | 'bar'
 
 export function DashboardContent() {
   const { selectedSymbols, clearSymbols } = useSymbols()
   const [chartType, setChartType] = useState<ChartType>('line')
-  const [isLoading, setIsLoading] = useState(false)
   const [timeSeriesData, setTimeSeriesData] = useState<Record<string, TimeSeriesData>>({})
-  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
-  // Fetch time series data for selected symbols
-  useEffect(() => {
-    const fetchData = async () => {
-      // Only fetch if we have at least one symbol selected
-      if (selectedSymbols.length === 0) {
-        return
+  // Define the fetch function that will be used by useAsync
+  const fetchData = useCallback(async () => {
+    // Don't fetch if we have no symbols selected
+    if (selectedSymbols.length === 0) {
+      return {}
+    }
+    
+    // Create a new object to store the results
+    const newData: Record<string, TimeSeriesData> = {}
+    
+    // Fetch data for each symbol
+    for (const symbol of selectedSymbols) {
+      // Skip if we already have data for this symbol
+      if (timeSeriesData[symbol.symbol]) {
+        newData[symbol.symbol] = timeSeriesData[symbol.symbol]
+        continue
       }
       
-      setIsLoading(true)
-      setError(null)
-      
       try {
-        // Create a new object to store the results
-        const newData: Record<string, TimeSeriesData> = {}
-        
-        // Fetch data for each symbol
-        for (const symbol of selectedSymbols) {
-          // Skip if we already have data for this symbol
-          if (timeSeriesData[symbol.symbol]) {
-            newData[symbol.symbol] = timeSeriesData[symbol.symbol]
-            continue
-          }
-          
-          try {
-            const data = await alphaVantageService.fetchTimeSeriesData(symbol.symbol)
-            newData[symbol.symbol] = data
-          } catch (err) {
-            console.error(`Error fetching data for ${symbol.symbol}:`, err)
-            // Continue with other symbols even if one fails
-          }
-        }
-        
-        setTimeSeriesData(prevData => ({
-          ...prevData,
-          ...newData
-        }))
+        const data = await alphaVantageService.fetchTimeSeriesData(symbol.symbol)
+        newData[symbol.symbol] = data
       } catch (err) {
-        console.error('Error fetching time series data:', err)
-        setError('Failed to fetch price data. Please try again later.')
-      } finally {
-        setIsLoading(false)
+        console.error(`Error fetching data for ${symbol.symbol}:`, err)
+        // Continue with other symbols even if one fails
       }
     }
     
-    fetchData()
-  }, [selectedSymbols])
+    // Return the new data to be merged with existing data
+    return newData
+  }, [selectedSymbols, timeSeriesData])
+
+  // Use our custom hook to manage the async state
+  const {
+    execute: fetchTimeSeriesData,
+    isLoading,
+    error,
+    data: newData,
+  } = useAsync<Record<string, TimeSeriesData>>(fetchData)
+
+  // Update the timeSeriesData state when new data is available
+  useEffect(() => {
+    if (newData && Object.keys(newData).length > 0) {
+      setTimeSeriesData(prevData => ({
+        ...prevData,
+        ...newData
+      }))
+    }
+  }, [newData])
+
+  // Fetch data when selected symbols change
+  useEffect(() => {
+    if (selectedSymbols.length > 0) {
+      fetchTimeSeriesData()
+    }
+  }, [selectedSymbols, fetchTimeSeriesData])
 
   // Process the time series data into the format needed for charts
-  const processChartData = () => {
+  const processChartData = useCallback(() => {
     // Check if we have data for the selected symbols
     const hasData = selectedSymbols.some(symbol => timeSeriesData[symbol.symbol])
     
@@ -121,7 +129,7 @@ export function DashboardContent() {
       
       return dataPoint
     })
-  }
+  }, [isLoading, selectedSymbols, timeSeriesData])
   
   // Format date from YYYY-MM-DD to MMM YYYY
   const formatDate = (dateStr: string) => {
@@ -134,6 +142,14 @@ export function DashboardContent() {
   // Check if we have any symbols selected and data to display
   const hasSymbols = selectedSymbols.length > 0
   const hasMaxSymbols = selectedSymbols.length >= 5
+
+  // Handle retry on error
+  const handleRetry = useCallback(() => {
+    // Reset time series data for a fresh fetch
+    setTimeSeriesData({})
+    // Execute the fetch operation again
+    fetchTimeSeriesData()
+  }, [fetchTimeSeriesData])
 
   return (
     <div className="space-y-6">
@@ -202,20 +218,12 @@ export function DashboardContent() {
           </CardHeader>
           <CardContent className="px-6 pb-6">
             {isLoading ? (
-              <LoadingIndicator 
-                size="lg" 
-                text="Loading price data..." 
-                heightClass="h-92" 
-              />
+              <SkeletonChart />
             ) : error ? (
               <ErrorMessage 
                 error={error} 
                 showRetry={true}
-                onRetry={() => {
-                  setIsLoading(true);
-                  setTimeSeriesData({});
-                  setError(null);
-                }}
+                onRetry={handleRetry}
               />
             ) : chartData.length === 0 ? (
               <EmptyState

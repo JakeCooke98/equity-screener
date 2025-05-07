@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useDebounce } from './useDebounce';
 import { ApiError } from '@/services/api-client';
 import { alphaVantageService, SymbolSearchMatch } from '@/services/alphaVantage/index';
 import { CacheManager } from '@/utils/cacheManager';
+import { useAsync } from './useAsync';
 
 interface UseSymbolSearchResult {
   results: SymbolSearchMatch[];
   isLoading: boolean;
-  error: ApiError | null;
+  error: ApiError | Error | null;
 }
 
 // Create a singleton cache instance for symbol search results
@@ -25,49 +26,54 @@ export function useSymbolSearch(
   query: string,
   debounceMs: number = 500
 ): UseSymbolSearchResult {
-  const [results, setResults] = useState<SymbolSearchMatch[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<ApiError | null>(null);
-  
   // Debounce the search query to prevent excessive API calls
   // Skip debouncing if debounceMs is 0 (immediate execution)
   const debouncedQuery = debounceMs > 0 ? useDebounce(query, debounceMs) : query;
+  const [results, setResults] = useState<SymbolSearchMatch[]>([]);
 
-  useEffect(() => {
-    // Reset error when query changes
-    setError(null);
-    
-    // Don't search if query is empty and not specifically requesting initial data (with debounceMs=0)
+  // Define search function
+  const searchSymbols = useCallback(async () => {
+    // Don't search if query is empty and not specifically requesting initial data
     if (!debouncedQuery.trim() && debounceMs !== 0) {
-      setResults([]);
-      return;
+      return [];
     }
 
-    // Check cache first
+    // Try to get from cache first
     const cachedResults = symbolSearchCache.get(debouncedQuery);
     if (cachedResults !== null) {
-      setResults(cachedResults);
-      return;
+      return cachedResults;
     }
 
-    const fetchResults = async () => {
-      setIsLoading(true);
-      
-      try {
-        const data = await alphaVantageService.searchSymbols(debouncedQuery);
-        // Cache the results
-        symbolSearchCache.set(debouncedQuery, data);
-        setResults(data);
-      } catch (err) {
-        setError(err as ApiError);
-        setResults([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchResults();
+    // Fetch from API
+    const data = await alphaVantageService.searchSymbols(debouncedQuery);
+    
+    // Cache the results
+    symbolSearchCache.set(debouncedQuery, data);
+    
+    return data;
   }, [debouncedQuery, debounceMs]);
+
+  // Use our custom useAsync hook to manage state
+  const {
+    execute,
+    isLoading,
+    error,
+    data,
+  } = useAsync<SymbolSearchMatch[]>(
+    searchSymbols,
+    {
+      immediate: true,
+      deps: [debouncedQuery],
+      initialData: []
+    }
+  );
+
+  // Update results when data changes
+  useEffect(() => {
+    if (data) {
+      setResults(data);
+    }
+  }, [data]);
 
   return { results, isLoading, error };
 }

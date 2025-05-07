@@ -10,7 +10,8 @@ import { cn } from '@/lib/utils'
 import { CacheManager } from '@/utils/cacheManager'
 import { ErrorMessage } from '@/components/ui/error-message'
 import { EmptyState } from '@/components/ui/empty-state'
-import { LoadingIndicator } from '@/components/ui/loading-indicator'
+import { useAsync } from '@/hooks/useAsync'
+import { SkeletonNews } from '@/components/ui/skeleton'
 
 // Consistent caching with CacheManager
 const marketNewsCache = new CacheManager<NewsArticle[]>(10 * 60 * 1000); // 10 minutes
@@ -62,218 +63,141 @@ interface MarketNewsPanelProps {
  */
 export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsPanelProps) {
   // State
-  const [news, setNews] = useState<NewsArticle[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [isExpanded, setIsExpanded] = useState(true)
   const [activeTab, setActiveTab] = useState<'all' | 'market'>(selectedSymbols.length > 0 ? 'all' : 'market')
+  const [news, setNews] = useState<NewsArticle[]>([])
   
   // Use refs to track previous state for comparison
-  const hasLoadedNews = useRef(false)
   const symbolKey = selectedSymbols.sort().join(',')
   const prevSymbolKey = useRef(symbolKey)
   const prevActiveTab = useRef(activeTab)
   const prevSelectedSymbolsLength = useRef(selectedSymbols.length)
-  const fetchInProgress = useRef(false)
+  
+  // Define the fetch function for market or symbol news
+  const fetchNewsData = useCallback(async () => {
+    if (activeTab === 'market' || selectedSymbols.length === 0) {
+      // Check cache first for market news
+      const cachedData = marketNewsCache.get('market-news');
+      if (cachedData) {
+        return cachedData;
+      }
+      
+      // Fetch market news
+      const data = await alphaVantageService.fetchMarketNews();
+      
+      // Cache the results
+      if (data && data.length > 0) {
+        marketNewsCache.set('market-news', data);
+      }
+      
+      return data;
+    } else {
+      // Check cache first for symbol news
+      const cachedData = symbolNewsCache.get(symbolKey);
+      if (cachedData) {
+        return cachedData;
+      }
+      
+      // Fetch symbol news
+      const data = await alphaVantageService.fetchMultiSymbolNews(selectedSymbols);
+      
+      // Cache the results
+      if (data && data.length > 0) {
+        symbolNewsCache.set(symbolKey, data);
+      }
+      
+      return data;
+    }
+  }, [activeTab, selectedSymbols, symbolKey]);
+  
+  // Use our custom hook to manage async state
+  const {
+    execute: fetchNews,
+    isLoading,
+    error,
+    data: newsData,
+    reset: resetNewsState
+  } = useAsync<NewsArticle[]>(fetchNewsData);
+  
+  // Update the news state when new data is available
+  useEffect(() => {
+    if (newsData && newsData.length > 0) {
+      setNews(newsData);
+    } else if (newsData && newsData.length === 0) {
+      // Clear news if empty array is returned (no results)
+      setNews([]);
+    }
+  }, [newsData]);
   
   // Update active tab when symbols change
   useEffect(() => {
-    const symbolsChanged = symbolKey !== prevSymbolKey.current
-    const symbolCountChanged = prevSelectedSymbolsLength.current !== selectedSymbols.length
+    const symbolsChanged = symbolKey !== prevSymbolKey.current;
+    const symbolCountChanged = prevSelectedSymbolsLength.current !== selectedSymbols.length;
     
     // Track if symbols were added, removed, or just reordered
-    const symbolsAdded = selectedSymbols.length > prevSelectedSymbolsLength.current
-    const symbolsRemoved = selectedSymbols.length < prevSelectedSymbolsLength.current
+    const symbolsAdded = selectedSymbols.length > prevSelectedSymbolsLength.current;
+    const symbolsRemoved = selectedSymbols.length < prevSelectedSymbolsLength.current;
     
     // Update refs
-    prevSymbolKey.current = symbolKey
-    prevSelectedSymbolsLength.current = selectedSymbols.length
+    prevSymbolKey.current = symbolKey;
+    prevSelectedSymbolsLength.current = selectedSymbols.length;
     
     if (symbolsChanged) {
-      console.log(`Symbols changed: ${prevSymbolKey.current} -> ${symbolKey}`)
+      console.log(`Symbols changed: ${prevSymbolKey.current} -> ${symbolKey}`);
       
       // If symbols were added and we're on market tab, switch to symbols tab
       if (symbolsAdded && activeTab === 'market') {
-        console.log('Symbols added, switching to symbols tab')
-        setActiveTab('all')
+        console.log('Symbols added, switching to symbols tab');
+        setActiveTab('all');
       }
       // If all symbols were removed and we're on symbols tab, switch to market tab
       else if (selectedSymbols.length === 0 && activeTab === 'all') {
-        console.log('All symbols removed, switching to market tab')
-        setActiveTab('market')
+        console.log('All symbols removed, switching to market tab');
+        setActiveTab('market');
       } else {
-        // For any other symbol changes, immediately fetch new data
-        // Clear news when symbols change to prevent stale data
-        setNews([])
-        setIsLoading(true)
-        fetchNews()
+        // For any other symbol changes, fetch new data and reset state
+        resetNewsState();
+        fetchNews();
       }
     }
-  }, [selectedSymbols, symbolKey])
+  }, [selectedSymbols, symbolKey, activeTab, fetchNews, resetNewsState]);
   
-  // Fetch news data based on selected symbols
-  const fetchNews = useCallback(async () => {
-    // Prevent concurrent fetches
-    if (fetchInProgress.current) {
-      console.log('Fetch already in progress, skipping')
-      return
-    }
-    
-    fetchInProgress.current = true
-    let shouldFetch = false
-    
-    try {
-      // Determine if we need to fetch new data
-      if (activeTab === 'market' || selectedSymbols.length === 0) {
-        // Market news case - check cache first
-        const cachedData = marketNewsCache.get('market-news');
-        if (cachedData) {
-          // Use cached market news
-          setNews(cachedData);
-          setIsLoading(false);
-          fetchInProgress.current = false;
-          return;
-        }
-        // No valid cache, need to fetch
-        shouldFetch = true;
-      } else {
-        // Symbol news case - check cache first
-        const cachedData = symbolNewsCache.get(symbolKey);
-        if (cachedData) {
-          // Use cached symbol news
-          setNews(cachedData);
-          setIsLoading(false);
-          fetchInProgress.current = false;
-          return;
-        }
-        // No valid cache, need to fetch
-        shouldFetch = true;
-      }
-      
-      // If we don't need to fetch, exit early
-      if (!shouldFetch) {
-        fetchInProgress.current = false
-        return
-      }
-      
-      setIsLoading(true)
-      setError(null)
-      
-      let data: NewsArticle[]
-      
-      if (activeTab === 'market' || selectedSymbols.length === 0) {
-        console.log("Fetching market news")
-        try {
-          // Fetch market news from API
-          data = await alphaVantageService.fetchMarketNews()
-          
-          // Update cache if we got data
-          if (data && data.length > 0) {
-            marketNewsCache.set('market-news', data);
-          }
-        } catch (err) {
-          console.error("Market news API failed:", err)
-          setNews([])
-          setError("Unable to load market news at this time.")
-          setIsLoading(false)
-          fetchInProgress.current = false
-          return
-        }
-      } else {
-        console.log(`Fetching news for symbols: ${symbolKey}`)
-        try {
-          // Fetch symbol-specific news from API
-          data = await alphaVantageService.fetchMultiSymbolNews(selectedSymbols)
-          
-          // Update cache if we got data
-          if (data && data.length > 0) {
-            symbolNewsCache.set(symbolKey, data);
-          }
-        } catch (err) {
-          console.error(`Symbol news API failed for ${symbolKey}:`, err)
-          setNews([])
-          setError(`Unable to load news for ${selectedSymbols.join(', ')} at this time.`)
-          setIsLoading(false)
-          fetchInProgress.current = false
-          return
-        }
-      }
-      
-      if (data && data.length > 0) {
-        setNews(data)
-        setError(null)
-      } else {
-        // Empty data case - show a clean empty state
-        setNews([])
-      }
-    } catch (err) {
-      console.error('Error fetching news:', err)
-      
-      // Use a more user-friendly error message
-      let errorMessage = "Unable to load news at this time."
-      
-      if (err instanceof Error) {
-        if (err.message.includes('API limit')) {
-          errorMessage = "API request limit reached. Please try again later."
-        } else if (err.message.includes('No news entries found')) {
-          // This is not really an error, just no data available
-          setNews([])
-          setError(null)
-          setIsLoading(false)
-          fetchInProgress.current = false
-          return
-        }
-      } 
-      
-      setError(errorMessage)
-      setNews([])
-    } finally {
-      setIsLoading(false)
-      fetchInProgress.current = false
-    }
-  }, [activeTab, selectedSymbols, symbolKey])
-  
-  // Initial data fetch
+  // Fetch news on initial load
   useEffect(() => {
-    if (!hasLoadedNews.current) {
-      hasLoadedNews.current = true
-      setIsLoading(true)
-      fetchNews()
-    }
-  }, [fetchNews])
+    fetchNews();
+  }, []);
   
-  // Refetch when tab changes
+  // Fetch news when tab changes
   useEffect(() => {
-    const tabChanged = prevActiveTab.current !== activeTab
+    const tabChanged = prevActiveTab.current !== activeTab;
     
     if (tabChanged) {
-      console.log(`Tab changed from ${prevActiveTab.current} to ${activeTab}`)
-      prevActiveTab.current = activeTab
+      console.log(`Tab changed from ${prevActiveTab.current} to ${activeTab}`);
+      prevActiveTab.current = activeTab;
       
-      // Clear any current news to avoid displaying stale data
-      setNews([])
-      setIsLoading(true)
-      fetchNews()
+      // Reset state and fetch new data
+      resetNewsState();
+      fetchNews();
     }
-  }, [activeTab, fetchNews])
+  }, [activeTab, fetchNews, resetNewsState]);
   
   // Handle tab change
   const handleTabChange = (value: string) => {
     // Only allow 'all' tab if we have selected symbols
     if (value === 'all' && selectedSymbols.length === 0) {
-      console.log('Attempted to switch to symbols tab with no symbols selected')
-      return
+      console.log('Attempted to switch to symbols tab with no symbols selected');
+      return;
     }
     
-    setActiveTab(value as 'all' | 'market')
-  }
+    setActiveTab(value as 'all' | 'market');
+  };
   
   // Title text based on state
   const titleText = activeTab === 'market' 
     ? 'Market News' 
     : selectedSymbols.length > 0 
       ? `News for ${selectedSymbols.join(', ')}` 
-      : 'Market News'
+      : 'Market News';
   
   return (
     <Card className={cn('w-full min-h-[12rem] overflow-hidden', className)}>
@@ -324,11 +248,7 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
       )}>
         <CardContent className="px-6 pb-6">
           {isLoading ? (
-            <LoadingIndicator 
-              size="lg" 
-              text="Loading news articles..." 
-              heightClass="h-60" 
-            />
+            <SkeletonNews count={6} />
           ) : error ? (
             <ErrorMessage 
               error={error} 
@@ -366,8 +286,8 @@ export function MarketNewsPanel({ selectedSymbols = [], className }: MarketNewsP
                           e.currentTarget.style.display = 'none';
                         }}
                       />
-                      <div className="absolute inset-0 flex items-center justify-center bg-muted">
-                        <LoadingIndicator size="sm" />
+                      <div className="absolute inset-0 flex items-center justify-center bg-muted opacity-60">
+                        {/* Loading spinner for the image */}
                       </div>
                     </div>
                   )}

@@ -175,7 +175,7 @@ export default function FavoritesPage() {
                         
                         {visibleColumns.includes('country') && (
                           <TableCell className="px-6 py-4">
-                            {symbol.country || symbol.region || 'Unknown'}
+                            {symbol.region || 'Unknown'}
                           </TableCell>
                         )}
                         

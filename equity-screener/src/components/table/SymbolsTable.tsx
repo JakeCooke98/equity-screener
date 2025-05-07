@@ -18,6 +18,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { StockQuoteTooltip } from './StockQuoteTooltip'
 import { useRouter } from 'next/navigation'
 import { FavoriteButton } from '@/components/favorites/FavoriteButton'
+import { SkeletonSymbolTable } from '@/components/ui/skeleton'
 
 interface SymbolsTableProps {
   data: SymbolSearchMatch[]
@@ -287,30 +288,7 @@ export function SymbolsTable({
 
   // Render the rows with selected state if available
   const renderRows = () => {
-    if (isLoading) {
-      // Return loading skeleton rows (unchanged)
-      return Array.from({ length: itemsPerPage }, (_, i) => (
-        <TableRow key={`loading-${i}`} className="animate-pulse">
-          {/* Add favorite column skeleton */}
-          <TableCell className="w-10 p-2">
-            <div className="h-5 w-5 rounded-full bg-muted" />
-          </TableCell>
-          {visibleColumns.filter(col => col !== 'favorite').map((column, index) => (
-            <TableCell key={`${column}-${index}`}>
-              <div className="h-5 w-full rounded bg-muted" 
-                style={{ width: column === 'name' ? '100%' : '60%' }} 
-              />
-            </TableCell>
-          ))}
-          {/* Action column skeleton */}
-          <TableCell className="w-10 p-2 text-right">
-            <div className="h-5 w-5 rounded-full bg-muted ml-auto" />
-          </TableCell>
-        </TableRow>
-      ));
-    }
-
-    if (currentData.length === 0) {
+    if (currentData.length === 0 && !isLoading) {
       return (
         <TableRow>
           <TableCell colSpan={visibleColumns.length + 2} className="h-24 text-center">
@@ -344,60 +322,67 @@ export function SymbolsTable({
             />
           </TableCell>
           
-          {/* Render other columns */}
-          {visibleColumns.includes('symbol') && visibleColumns.indexOf('symbol') !== -1 && (
+          {/* Symbol column */}
+          {visibleColumns.includes('symbol') && (
             <TableCell className="px-6 py-4 font-medium text-primary">
               {symbol.symbol || 'Unknown'}
             </TableCell>
           )}
            
+          {/* Name column */}
           {visibleColumns.includes('name') && (
             <TableCell className="px-6 py-4 max-w-xs truncate">
               {symbol.name || 'Unknown'}
             </TableCell>
           )}
            
+          {/* Ticker column */}
           {visibleColumns.includes('ticker') && (
             <TableCell className="px-6 py-4">
               {symbol.symbol ? `${symbol.symbol}.${symbol.region || 'UNK'}` : 'Unknown'}
             </TableCell>
           )}
            
+          {/* Type column */}
           {visibleColumns.includes('type') && (
             <TableCell className="px-6 py-4">
               {symbol.type || 'Unknown'}
             </TableCell>
           )}
            
+          {/* Region column */}
           {visibleColumns.includes('region') && (
             <TableCell className="px-6 py-4">
               {symbol.region || 'Unknown'}
             </TableCell>
           )}
            
+          {/* Country column */}
           {visibleColumns.includes('country') && (
             <TableCell className="px-6 py-4">
-              {symbol.country || symbol.region || 'Unknown'}
+              {symbol.region || 'Unknown'}
             </TableCell>
           )}
            
+          {/* Currency column */}
           {visibleColumns.includes('currency') && (
             <TableCell className="px-6 py-4">
               {symbol.currency || 'Unknown'}
             </TableCell>
           )}
            
+          {/* Match score column */}
           {visibleColumns.includes('matchScore') && (
             <TableCell className="px-6 py-4">
               <div className="flex items-center gap-2">
                 <div className="w-16 bg-muted rounded-full h-2">
                   <div 
                     className="bg-primary h-2 rounded-full" 
-                    style={{ width: `${parseFloat(symbol.matchScore || '0') * 100}%` }}
+                    style={{ width: `${parseFloat(String(symbol.matchScore || '0')) * 100}%` }}
                   ></div>
                 </div>
                 <span className="text-xs">
-                  {(parseFloat(symbol.matchScore || '0') * 100).toFixed(0)}%
+                  {(parseFloat(String(symbol.matchScore || '0')) * 100).toFixed(0)}%
                 </span>
               </div>
             </TableCell>
@@ -423,6 +408,11 @@ export function SymbolsTable({
         </TableRow>
       );
     });
+  }
+
+  // Show the skeleton loader when data is loading
+  if (isLoading && data.length === 0) {
+    return <SkeletonSymbolTable rows={itemsPerPage} />;
   }
 
   return (
@@ -462,6 +452,38 @@ export function SymbolsTable({
         </TableBody>
       </Table>
       
+      {/* Pagination controls */}
+      {data.length > itemsPerPage && (
+        <div className="flex items-center justify-between mt-4">
+          <div className="text-sm text-muted-foreground">
+            Showing {startIndex + 1}-{Math.min(endIndex, data.length)} of {data.length} results
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToPrevPage}
+              disabled={currentPage === 1}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span className="sr-only">Previous Page</span>
+            </Button>
+            <span className="text-sm font-medium">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={goToNextPage}
+              disabled={currentPage === totalPages}
+            >
+              <ChevronRight className="h-4 w-4" />
+              <span className="sr-only">Next Page</span>
+            </Button>
+          </div>
+        </div>
+      )}
+      
       {/* Stock quote tooltip */}
       {tooltipSymbol && tooltipPosition.top && tooltipPosition.left && isTooltipVisible && (
         <StockQuoteTooltip
@@ -478,41 +500,6 @@ export function SymbolsTable({
           isAbove={tooltipPosition.isAbove}
         />
       )}
-      
-      {/* Pagination controls */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between py-3 px-2">
-          <div className="flex-1 text-sm text-muted-foreground">
-            Showing <span className="font-medium">{startIndex + 1}</span> to <span className="font-medium">{endIndex}</span> of{" "}
-            <span className="font-medium">{data.length}</span> results
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToPrevPage}
-              disabled={currentPage === 1}
-              className="h-8 w-8 p-0"
-            >
-              <span className="sr-only">Go to previous page</span>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="text-sm font-medium">
-              Page {currentPage} of {totalPages}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={goToNextPage}
-              disabled={currentPage === totalPages}
-              className="h-8 w-8 p-0"
-            >
-              <span className="sr-only">Go to next page</span>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
     </div>
-  )
+  );
 } 
